@@ -1,0 +1,31 @@
+{
+  "name": "field-sales-ui",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "serve": "vite preview",
+    "build": "NODE_OPTIONS=--experimental-global-webcrypto vite build --base=/assets/field_sales/frontend/ && yarn copy-html-entry",
+    "copy-html-entry": "cp ../field_sales/public/frontend/index.html ../field_sales/www/field_sales_app.html"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.11",
+    "feather-icons": "^4.29.1",
+    "frappe-ui": "0.1.105",
+    "idb-keyval": "^6.2.1",
+    "vite-plugin-pwa": "^0.20.5",
+    "vue": "^3.5.12",
+    "vue-router": "^4.3.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.4.0",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.5",
+    "tailwindcss": "^3.4.3",
+    "vite": "^5.4.10"
+  },
+  "resolutions": {
+    "debug": "4.3.4"
+  }
+}

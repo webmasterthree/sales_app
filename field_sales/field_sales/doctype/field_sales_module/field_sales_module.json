@@ -1,0 +1,143 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:module_name",
+ "creation": "2026-08-23 11:27:33.217882",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "module_name",
+  "label",
+  "icon",
+  "route",
+  "cb_module",
+  "document_type",
+  "parent_module",
+  "is_group",
+  "sort_order",
+  "enabled"
+ ],
+ "fields": [
+  {
+   "description": "Stable key the client matches on, e.g. field_visit.",
+   "fieldname": "module_name",
+   "fieldtype": "Data",
+   "label": "Module Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "description": "What the rep sees on the tile.",
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Label",
+   "reqd": 1
+  },
+  {
+   "description": "Icon name shipped with the client, e.g. visit. Not a file - the client owns its own assets.",
+   "fieldname": "icon",
+   "fieldtype": "Data",
+   "label": "Icon"
+  },
+  {
+   "description": "Client route the tile opens, e.g. /visits.",
+   "fieldname": "route",
+   "fieldtype": "Data",
+   "label": "Route"
+  },
+  {
+   "fieldname": "cb_module",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "The tile is hidden unless the user can read this doctype.",
+   "fieldname": "document_type",
+   "fieldtype": "Link",
+   "label": "Document Type",
+   "options": "DocType"
+  },
+  {
+   "description": "Set to group this tile under another, e.g. Requisitions.",
+   "fieldname": "parent_module",
+   "fieldtype": "Link",
+   "label": "Parent Module",
+   "options": "Field Sales Module"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_group",
+   "fieldtype": "Check",
+   "label": "Is Group"
+  },
+  {
+   "default": "0",
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Sort Order"
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-23 11:27:33.217882",
+ "modified_by": "Administrator",
+ "module": "Field Sales",
+ "name": "Field Sales Module",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Executive App",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "label,route",
+ "sort_field": "sort_order",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "label",
+ "track_changes": 1
+}

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+    <title>Field Sales</title>
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Field Sales" />
+    <meta name="theme-color" content="#8EC641" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Manrope:wght@400;500;700;800&display=swap" />
+    <script type="module" crossorigin src="/assets/field_sales/frontend/assets/index-CS1jSXPG.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/field_sales/frontend/assets/index-kRtd30qH.css">
+  <link rel="manifest" href="/assets/field_sales/frontend/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/assets/field_sales/frontend/registerSW.js"></script></head>
+  <body class="antialiased">
+    <div id="app"></div>
+    <div id="modals"></div>
+    <div id="popovers"></div>
+    <script>
+      window.csrf_token = "{{ csrf_token }}"
+      window.site_name = "{{ site_name }}"
+      if (!window.frappe) window.frappe = {}
+      frappe.boot = {{ boot }}
+    </script>
+  </body>
+</html>

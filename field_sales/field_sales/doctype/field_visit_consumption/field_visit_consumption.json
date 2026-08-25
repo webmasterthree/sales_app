@@ -1,0 +1,73 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-22 23:30:18.728714",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "product_name",
+  "monthly_qty",
+  "uom",
+  "cb_cons",
+  "segment",
+  "grade"
+ ],
+ "fields": [
+  {
+   "columns": 3,
+   "fieldname": "product_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Product",
+   "reqd": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "monthly_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Monthly Quantity"
+  },
+  {
+   "columns": 2,
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "UOM",
+   "options": "UOM"
+  },
+  {
+   "fieldname": "cb_cons",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "segment",
+   "fieldtype": "Link",
+   "label": "Application Segment",
+   "options": "Application Segment"
+  },
+  {
+   "description": "Customer's own grading of this product.",
+   "fieldname": "grade",
+   "fieldtype": "Select",
+   "label": "Grade",
+   "options": "\nA\nB\nC\nD"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-22 23:30:18.728714",
+ "modified_by": "Administrator",
+ "module": "Field Sales",
+ "name": "Field Visit Consumption",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

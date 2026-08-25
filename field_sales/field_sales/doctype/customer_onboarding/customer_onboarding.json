@@ -1,0 +1,348 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-08-23 12:23:35.435550",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "sec_business",
+  "customer_name",
+  "business_type",
+  "gst_category",
+  "gstin",
+  "cb_business",
+  "pan",
+  "market_segment",
+  "customer_group",
+  "sec_contact",
+  "location",
+  "contact_person",
+  "contact_number",
+  "cb_contact",
+  "territory",
+  "field_visit",
+  "sec_credit",
+  "proposed_credit",
+  "credit_days",
+  "cb_credit",
+  "credit_limit",
+  "sec_docs",
+  "documents",
+  "sec_owner",
+  "sales_person",
+  "sales_person_name",
+  "request_date",
+  "sec_status",
+  "status",
+  "customer",
+  "cb_status",
+  "decided_on",
+  "decision_remarks",
+  "workflow_state",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "default": "CO-.YYYY.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "CO-.YYYY.-.#####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sec_business",
+   "fieldtype": "Section Break",
+   "label": "Business"
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Outlet / Business Name",
+   "reqd": 1
+  },
+  {
+   "default": "Registered",
+   "fieldname": "business_type",
+   "fieldtype": "Select",
+   "label": "Business Type",
+   "options": "Registered\nUnregistered",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Registered'",
+   "fieldname": "gst_category",
+   "fieldtype": "Select",
+   "label": "GST Category",
+   "options": "Registered Regular\nRegistered Composition\nUnregistered\nSEZ\nOverseas\nDeemed Export\nUIN Holders\nComposition"
+  },
+  {
+   "depends_on": "eval:doc.business_type=='Registered'",
+   "fieldname": "gstin",
+   "fieldtype": "Data",
+   "label": "GSTIN"
+  },
+  {
+   "fieldname": "cb_business",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "pan",
+   "fieldtype": "Data",
+   "label": "PAN"
+  },
+  {
+   "fieldname": "market_segment",
+   "fieldtype": "Link",
+   "label": "Market Segment",
+   "options": "Market Segment"
+  },
+  {
+   "fieldname": "customer_group",
+   "fieldtype": "Link",
+   "label": "Customer Group",
+   "options": "Customer Group"
+  },
+  {
+   "fieldname": "sec_contact",
+   "fieldtype": "Section Break",
+   "label": "Location & Contact"
+  },
+  {
+   "fieldname": "location",
+   "fieldtype": "Link",
+   "label": "Address",
+   "options": "Address",
+   "reqd": 1
+  },
+  {
+   "fieldname": "contact_person",
+   "fieldtype": "Data",
+   "label": "Contact Person"
+  },
+  {
+   "fieldname": "contact_number",
+   "fieldtype": "Data",
+   "label": "Contact Number",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cb_contact",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "territory",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Territory",
+   "options": "Territory",
+   "reqd": 1
+  },
+  {
+   "description": "The visit that led to this onboarding, if any.",
+   "fieldname": "field_visit",
+   "fieldtype": "Link",
+   "label": "From Visit",
+   "options": "Field Visit"
+  },
+  {
+   "fieldname": "sec_credit",
+   "fieldtype": "Section Break",
+   "label": "Proposed Terms"
+  },
+  {
+   "default": "Advance",
+   "fieldname": "proposed_credit",
+   "fieldtype": "Select",
+   "label": "Payment Basis",
+   "options": "Advance\nCredit"
+  },
+  {
+   "depends_on": "eval:doc.proposed_credit=='Credit'",
+   "fieldname": "credit_days",
+   "fieldtype": "Int",
+   "label": "Credit Days"
+  },
+  {
+   "fieldname": "cb_credit",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.proposed_credit=='Credit'",
+   "fieldname": "credit_limit",
+   "fieldtype": "Currency",
+   "label": "Credit Limit"
+  },
+  {
+   "fieldname": "sec_docs",
+   "fieldtype": "Section Break",
+   "label": "Documents"
+  },
+  {
+   "fieldname": "documents",
+   "fieldtype": "Table",
+   "label": "Documents",
+   "options": "Onboarding Document"
+  },
+  {
+   "fieldname": "sec_owner",
+   "fieldtype": "Section Break",
+   "label": "Requested By"
+  },
+  {
+   "fieldname": "sales_person",
+   "fieldtype": "Link",
+   "label": "Requested By",
+   "options": "Employee",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "sales_person.employee_name",
+   "fieldname": "sales_person_name",
+   "fieldtype": "Data",
+   "label": "Requested By Name",
+   "read_only": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "request_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Request Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sec_status",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Pending\nApproved\nRejected",
+   "read_only": 1
+  },
+  {
+   "description": "Created when this onboarding is approved.",
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb_status",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "decided_on",
+   "fieldtype": "Date",
+   "label": "Decided On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "decision_remarks",
+   "fieldtype": "Small Text",
+   "label": "Decision Remarks",
+   "read_only": 1
+  },
+  {
+   "fieldname": "workflow_state",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Workflow State",
+   "options": "Workflow State",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Customer Onboarding",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Customer Onboarding",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-08-23 12:23:35.773689",
+ "modified_by": "Administrator",
+ "module": "Field Sales",
+ "name": "Customer Onboarding",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Executive App",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "customer_name,contact_number,status",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "customer_name",
+ "track_changes": 1
+}

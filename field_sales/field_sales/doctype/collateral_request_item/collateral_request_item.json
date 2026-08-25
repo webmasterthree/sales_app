@@ -1,0 +1,61 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-23 00:02:26.013340",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "collateral",
+  "description",
+  "qty",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "columns": 4,
+   "description": "Leave blank for something not in the collateral library.",
+   "fieldname": "collateral",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Collateral",
+   "options": "Sales Collateral"
+  },
+  {
+   "columns": 4,
+   "fieldname": "description",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Description"
+  },
+  {
+   "columns": 2,
+   "default": "1",
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Quantity",
+   "reqd": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-23 00:02:26.013340",
+ "modified_by": "Administrator",
+ "module": "Field Sales",
+ "name": "Collateral Request Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

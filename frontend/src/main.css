@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #app {
+  height: 100%;
+}
+
+body {
+  font-family: var(--fs-display);
+}
+
+.font-display {
+  font-family: var(--fs-display);
+}
+
+.font-mono {
+  font-family: var(--fs-mono);
+}
+
+/* thumb-reachable back affordance + bottom-pinned primary actions rely on
+   safe-area padding on devices with a home indicator */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}

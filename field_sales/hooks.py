@@ -8,7 +8,12 @@ app_license = "mit"
 # Apps
 # ------------------
 
-# required_apps = []
+# field_sales is not installable on a bare Frappe site: it links against
+# Customer, Item, Territory, Sales Order and Pricing Rule (erpnext), and
+# Employee Checkin for attendance (hrms). Declaring this is what makes
+# `bench install-app field_sales` pull them in automatically instead of
+# failing partway through the first doctype that references one.
+required_apps = ["erpnext", "hrms"]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -59,10 +64,31 @@ app_license = "mit"
 # application home page (will override Website Settings)
 # home_page = "login"
 
+# The Field Sales PWA lives at /field_sales_app; a rep or manager signing in
+# is routed straight there rather than to the desk, which they never need.
+#
+# The page is named "field_sales_app", NOT "app" - Frappe core itself owns a
+# www page literally named "app" (the desk shell, apps/frappe/frappe/www/app.py).
+# Naming this one "app" too let it silently shadow the real desk for every
+# user, since field_sales loads after frappe - www/app.py was renamed to
+# www/field_sales_app.py to fix this.
+website_route_rules = [
+    # the bare path (no trailing segment) needs its own rule - Werkzeug's
+    # <path:...> converter requires at least one character, so it never
+    # matches "/field_sales_app" on its own, only "/field_sales_app/...".
+    # Without this, the SPA's own root route ("/") and role_home_page below
+    # both 404 before the Vue app ever loads.
+    {"from_route": "/field_sales_app", "to_route": "field_sales_app"},
+    {"from_route": "/field_sales_app/<path:app_path>", "to_route": "field_sales_app"},
+]
+
 # website user home page (by Role)
 # role_home_page = {
 # 	"Role": "home_page"
 # }
+role_home_page = {
+    "Sales Executive App": "/field_sales_app",
+}
 
 # Generators
 # ----------
@@ -171,6 +197,11 @@ app_license = "mit"
 
 # before_tests = "field_sales.install.before_tests"
 
+# Removes a stale Property Setter that a legacy app installed on this site
+# (mohan_impex) keeps re-shipping in its fixtures, which otherwise breaks
+# every Notification Log insert after each migrate - see migrations.py.
+after_migrate = "field_sales.migrations.after_migrate"
+
 # Overriding Methods
 # ------------------------------
 #
@@ -247,3 +278,12 @@ app_license = "mit"
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
 
+# Server-side pricing enforcement. The rate a client submits is a suggestion;
+# the server recalculates it on every save, whatever the origin.
+# This must run on before_validate: the controller computes amounts and totals
+# during validate, so correcting a rate afterwards would leave them stale.
+doc_events = {
+	"Sales Order": {
+		"before_validate": "field_sales.pricing.enforce_sales_order_rates",
+	},
+}

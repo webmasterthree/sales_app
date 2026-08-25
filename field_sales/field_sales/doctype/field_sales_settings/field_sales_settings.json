@@ -1,0 +1,95 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-22 23:41:30.391842",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "sec_geo",
+  "enforce_geofence",
+  "geofence_radius",
+  "cb_geo",
+  "geofence_behaviour",
+  "anchor_on_first_visit"
+ ],
+ "fields": [
+  {
+   "fieldname": "sec_geo",
+   "fieldtype": "Section Break",
+   "label": "Geofencing"
+  },
+  {
+   "default": "1",
+   "description": "Check the rep's position against the outlet when they check in.",
+   "fieldname": "enforce_geofence",
+   "fieldtype": "Check",
+   "label": "Enforce Geofence"
+  },
+  {
+   "default": "200",
+   "depends_on": "enforce_geofence",
+   "description": "How close the rep must be to the outlet, in metres.",
+   "fieldname": "geofence_radius",
+   "fieldtype": "Int",
+   "label": "Geofence Radius (m)"
+  },
+  {
+   "fieldname": "cb_geo",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Warn",
+   "depends_on": "enforce_geofence",
+   "description": "Warn records the distance and lets the visit continue. Block refuses the check-in. GPS drifts and basements have no signal, so Block will generate support calls.",
+   "fieldname": "geofence_behaviour",
+   "fieldtype": "Select",
+   "label": "When Outside The Radius",
+   "options": "Warn\nBlock\nAllow"
+  },
+  {
+   "default": "1",
+   "depends_on": "enforce_geofence",
+   "description": "If the outlet has no coordinates yet, use the first check-in position as its location.",
+   "fieldname": "anchor_on_first_visit",
+   "fieldtype": "Check",
+   "label": "Set Outlet Location On First Visit"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-08-22 23:41:30.391842",
+ "modified_by": "Administrator",
+ "module": "Field Sales",
+ "name": "Field Sales Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Sales Executive App",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

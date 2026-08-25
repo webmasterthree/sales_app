@@ -1,0 +1,555 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-08-22 23:30:18.861855",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "sec_party",
+  "party_type",
+  "customer",
+  "customer_name",
+  "prospect_name",
+  "outlet_name",
+  "cb_party",
+  "visit_date",
+  "visit_time",
+  "contact_person",
+  "contact_number",
+  "territory",
+  "sales_person",
+  "sales_person_name",
+  "sec_location",
+  "location",
+  "address_line1",
+  "address_line2",
+  "city",
+  "cb_location",
+  "state",
+  "pincode",
+  "captured_address",
+  "map_location",
+  "sec_timing",
+  "check_in",
+  "cb_timing",
+  "check_out",
+  "duration",
+  "sec_outcome",
+  "order_status",
+  "deal_confidence",
+  "cb_outcome",
+  "reason",
+  "remarks",
+  "sec_products",
+  "pitched_items",
+  "sec_consumption",
+  "consumption",
+  "sec_demo",
+  "demo_requested",
+  "demo_location",
+  "cb_demo",
+  "demo_conducted_by",
+  "demo_remarks",
+  "sec_links",
+  "lead",
+  "cb_links",
+  "opportunity",
+  "sec_status",
+  "onboarding_status",
+  "customer_update_requested",
+  "cb_status",
+  "workflow_state",
+  "amended_from",
+  "sec_geo_capture",
+  "check_in_latitude",
+  "check_in_longitude",
+  "check_in_distance",
+  "geofence_status",
+  "cb_geo_capture",
+  "check_out_latitude",
+  "check_out_longitude"
+ ],
+ "fields": [
+  {
+   "default": "FV-.YYYY.-.MM.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "FV-.YYYY.-.MM.-.#####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sec_party",
+   "fieldtype": "Section Break",
+   "label": "Who was visited"
+  },
+  {
+   "default": "Customer",
+   "fieldname": "party_type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Party Type",
+   "options": "Customer\nProspect",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.party_type=='Customer'",
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "mandatory_depends_on": "eval:doc.party_type=='Customer'",
+   "options": "Customer"
+  },
+  {
+   "fetch_from": "customer.customer_name",
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.party_type=='Prospect'",
+   "description": "A prospect captured in the field, before onboarding.",
+   "fieldname": "prospect_name",
+   "fieldtype": "Data",
+   "label": "Prospect Name",
+   "mandatory_depends_on": "eval:doc.party_type=='Prospect'"
+  },
+  {
+   "description": "The shop or branch visited, when the party has several.",
+   "fieldname": "outlet_name",
+   "fieldtype": "Data",
+   "label": "Outlet"
+  },
+  {
+   "fieldname": "cb_party",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Today",
+   "fieldname": "visit_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Visit Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "visit_time",
+   "fieldtype": "Time",
+   "label": "Visit Time"
+  },
+  {
+   "fieldname": "contact_person",
+   "fieldtype": "Link",
+   "label": "Contact",
+   "options": "Contact"
+  },
+  {
+   "fieldname": "contact_number",
+   "fieldtype": "Data",
+   "label": "Contact Number"
+  },
+  {
+   "fieldname": "territory",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Territory",
+   "options": "Territory",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sales_person",
+   "fieldtype": "Link",
+   "label": "Visited By",
+   "options": "Employee",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "sales_person.employee_name",
+   "fieldname": "sales_person_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Visited By Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sec_location",
+   "fieldtype": "Section Break",
+   "label": "Where"
+  },
+  {
+   "fieldname": "location",
+   "fieldtype": "Link",
+   "label": "Address",
+   "options": "Address"
+  },
+  {
+   "fetch_from": "location.address_line1",
+   "fieldname": "address_line1",
+   "fieldtype": "Data",
+   "label": "Address Line 1"
+  },
+  {
+   "fetch_from": "location.address_line2",
+   "fieldname": "address_line2",
+   "fieldtype": "Data",
+   "label": "Address Line 2"
+  },
+  {
+   "fetch_from": "location.city",
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "label": "City"
+  },
+  {
+   "fieldname": "cb_location",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "location.state",
+   "fieldname": "state",
+   "fieldtype": "Data",
+   "label": "State"
+  },
+  {
+   "fetch_from": "location.pincode",
+   "fieldname": "pincode",
+   "fieldtype": "Data",
+   "label": "Pincode"
+  },
+  {
+   "description": "Reverse-geocoded at check-in.",
+   "fieldname": "captured_address",
+   "fieldtype": "Small Text",
+   "label": "Captured Address",
+   "read_only": 1
+  },
+  {
+   "fieldname": "map_location",
+   "fieldtype": "Geolocation",
+   "label": "Map",
+   "read_only": 1
+  },
+  {
+   "fieldname": "shop_photo",
+   "fieldtype": "Attach Image",
+   "label": "Shop Photo"
+  },
+  {
+   "fieldname": "sec_timing",
+   "fieldtype": "Section Break",
+   "label": "Timing"
+  },
+  {
+   "fieldname": "check_in",
+   "fieldtype": "Datetime",
+   "label": "Check In",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb_timing",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "check_out",
+   "fieldtype": "Datetime",
+   "label": "Check Out",
+   "read_only": 1
+  },
+  {
+   "fieldname": "duration",
+   "fieldtype": "Duration",
+   "label": "Duration",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sec_outcome",
+   "fieldtype": "Section Break",
+   "label": "Outcome"
+  },
+  {
+   "default": "Without Order",
+   "fieldname": "order_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Order Status",
+   "options": "With Order\nWithout Order",
+   "reqd": 1
+  },
+  {
+   "default": "3",
+   "description": "1 is lowest, 5 is highest.",
+   "fieldname": "deal_confidence",
+   "fieldtype": "Select",
+   "label": "Deal Confidence",
+   "options": "1\n2\n3\n4\n5"
+  },
+  {
+   "fieldname": "cb_outcome",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.order_status=='Without Order'",
+   "description": "Why the visit did not produce an order.",
+   "fieldname": "reason",
+   "fieldtype": "Link",
+   "label": "Reason",
+   "options": "Field Reason"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "sec_products",
+   "fieldtype": "Section Break",
+   "label": "Products pitched"
+  },
+  {
+   "fieldname": "pitched_items",
+   "fieldtype": "Table",
+   "label": "Pitched Items",
+   "options": "Field Visit Item"
+  },
+  {
+   "fieldname": "sec_consumption",
+   "fieldtype": "Section Break",
+   "label": "Current consumption"
+  },
+  {
+   "fieldname": "consumption",
+   "fieldtype": "Table",
+   "label": "Consumption",
+   "options": "Field Visit Consumption"
+  },
+  {
+   "fieldname": "sec_demo",
+   "fieldtype": "Section Break",
+   "label": "Product demo"
+  },
+  {
+   "default": "0",
+   "fieldname": "demo_requested",
+   "fieldtype": "Check",
+   "label": "Demo Requested"
+  },
+  {
+   "depends_on": "demo_requested",
+   "fieldname": "demo_location",
+   "fieldtype": "Select",
+   "label": "Demo Location",
+   "options": "\nOn Site\nR&D Lab"
+  },
+  {
+   "fieldname": "cb_demo",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "demo_requested",
+   "fieldname": "demo_conducted_by",
+   "fieldtype": "Select",
+   "label": "Conducted By",
+   "options": "\nSelf\nSpecialist Required"
+  },
+  {
+   "depends_on": "demo_requested",
+   "fieldname": "demo_remarks",
+   "fieldtype": "Small Text",
+   "label": "Demo Remarks"
+  },
+  {
+   "fieldname": "sec_links",
+   "fieldtype": "Section Break",
+   "label": "Pipeline links"
+  },
+  {
+   "description": "Optional. Connects this visit to the native CRM pipeline.",
+   "fieldname": "lead",
+   "fieldtype": "Link",
+   "label": "Lead",
+   "options": "Lead"
+  },
+  {
+   "fieldname": "cb_links",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Optional. Set when the visit is being tracked as an opportunity.",
+   "fieldname": "opportunity",
+   "fieldtype": "Link",
+   "label": "Opportunity",
+   "options": "Opportunity"
+  },
+  {
+   "fieldname": "sec_status",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "fieldname": "onboarding_status",
+   "fieldtype": "Select",
+   "label": "Onboarding Status",
+   "options": "\nNot Required\nPending\nCompleted",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "The rep flagged that the customer record needs correcting.",
+   "fieldname": "customer_update_requested",
+   "fieldtype": "Check",
+   "label": "Customer Update Requested"
+  },
+  {
+   "fieldname": "cb_status",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "workflow_state",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Workflow State",
+   "options": "Workflow State",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Field Visit",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Field Visit",
+   "print_hide": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "sec_geo_capture",
+   "fieldtype": "Section Break",
+   "label": "Position captured"
+  },
+  {
+   "fieldname": "check_in_latitude",
+   "fieldtype": "Float",
+   "label": "Check In Latitude",
+   "precision": "6",
+   "read_only": 1
+  },
+  {
+   "fieldname": "check_in_longitude",
+   "fieldtype": "Float",
+   "label": "Check In Longitude",
+   "precision": "6",
+   "read_only": 1
+  },
+  {
+   "description": "Straight-line distance at check-in.",
+   "fieldname": "check_in_distance",
+   "fieldtype": "Int",
+   "label": "Distance From Outlet (m)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "geofence_status",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Geofence",
+   "options": "\nInside\nOutside\nNot Checked",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb_geo_capture",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "check_out_latitude",
+   "fieldtype": "Float",
+   "label": "Check Out Latitude",
+   "precision": "6",
+   "read_only": 1
+  },
+  {
+   "fieldname": "check_out_longitude",
+   "fieldtype": "Float",
+   "label": "Check Out Longitude",
+   "precision": "6",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-08-22 23:48:23.057072",
+ "modified_by": "Administrator",
+ "module": "Field Sales",
+ "name": "Field Visit",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Executive App",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "customer_name,prospect_name,visit_date,territory",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "customer_name",
+ "track_changes": 1
+}

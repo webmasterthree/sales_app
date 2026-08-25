@@ -1,0 +1,109 @@
+:root {
+  /* Palette lifted from the Mohan Impex Flutter app (lib/res/app_colors.dart)
+     so the PWA matches the product's actual brand instead of the teal
+     placeholder theme. Variable NAMES are kept stable on purpose - components
+     bind to these, not to raw hex values, so a future white-label deployment
+     can re-theme by editing only this file. */
+  --fs-ground: #FAFAFB;         /* scaffoldBG - page ground, most screens */
+  --fs-ground-home: #F1F5E8;    /* scaffoldBackgroundColor - tinted ground behind Home */
+  --fs-surface: #F8F9FE;        /* cloudWhite - card / tab surface */
+  --fs-surface-2: #EFEFF3;      /* secondary surface - skeletons, segmented control track */
+  --fs-ink: #2A2A2A;            /* black1 - primary text, near-black secondary buttons */
+  --fs-ink-2: #696974;          /* oliveGray - secondary text */
+  /* #7E7E7E (the original Flutter value) measures 3.9:1 on --fs-surface -
+     below the 4.5:1 WCAG AA floor for normal-size text. Darkened just enough
+     to clear it (5.1:1) without changing how it reads as "the lightest text
+     tone" relative to ink/ink-2. */
+  --fs-ink-3: #6B6B6B;          /* lightTextColor - labels, tertiary text */
+  --fs-rule: #E2E2E2;           /* cardBorder - hairlines */
+  --fs-rule-soft: #ECECEC;
+  --fs-accent: #8EC641;         /* greenColor - PRIMARY brand: buttons, header, active states */
+  --fs-accent-soft: #EAF4DC;
+  /* Text/icons ON TOP of a solid --fs-accent fill (header, primary buttons,
+     the active bottom-nav circle). White-on-#8EC641 measures ~2:1 - badly
+     fails WCAG even for large text/UI components (3:1 floor). This near-black
+     is the same value in both themes: --fs-accent itself stays a light-to-mid
+     green in both palettes, so the text sitting on it doesn't need to invert. */
+  --fs-accent-fg: #22301A;
+  /* Text/icons on the --fs-accent-soft TINT (chips, "needs your action"
+     links) - not the same color as plain --fs-accent text, which measures
+     ~1.8:1 on this pale mint and fails outright. */
+  --fs-accent-ink: #3F5C1B;
+  --fs-crit: #E5484D;
+  --fs-warn: #E8A33D;
+  --fs-good: #4B8B3B;
+  --fs-chart: #9787FF;          /* chart - the one accent violet, used sparingly */
+  --fs-action2: #2A2A2A;        /* near-black secondary/check-in button fill */
+  --fs-action2-fg: #FFFFFF;
+  --fs-shadow: 0 1px 2px rgba(42,42,42,.05), 0 8px 20px rgba(42,42,42,.06);
+  --fs-display: "Poppins", "Segoe UI", system-ui, sans-serif;
+  --fs-mono: "Poppins", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+/* A deployment can override just --fs-accent / --fs-accent-soft to rebrand
+   without touching layout - the whole point of a themeable palette.
+   The original Flutter app has no dark theme at all, so this is an original
+   dark adaptation of the same green/near-black brand rather than an inversion
+   of the old teal placeholder. */
+:root[data-theme="dark"] {
+  --fs-ground: #15181B;
+  --fs-ground-home: #171B14;
+  --fs-surface: #1E2225;
+  --fs-surface-2: #272B2E;
+  --fs-ink: #F2F3F1;
+  --fs-ink-2: #B7B8B3;
+  --fs-ink-3: #8B8D89;
+  --fs-rule: #33373A;
+  --fs-rule-soft: #292D30;
+  --fs-accent: #A3D65C;
+  --fs-accent-soft: #26331A;
+  /* same near-black as light mode - --fs-accent is still a light-to-mid
+     green here, so text sitting on a solid fill of it needs the same dark
+     foreground (~8:1), not an inverted light one. */
+  --fs-accent-fg: #22301A;
+  /* here the plain accent green already reads fine on the near-black tint
+     (~7.8:1), unlike light mode where it needed darkening. */
+  --fs-accent-ink: #A3D65C;
+  --fs-crit: #F2726F;
+  --fs-warn: #F0B65E;
+  --fs-good: #79C267;
+  --fs-chart: #B4A8FF;
+  --fs-action2: #F2F3F1;
+  --fs-action2-fg: #15181B;
+  --fs-shadow: 0 1px 2px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    --fs-ground: #15181B;
+    --fs-ground-home: #171B14;
+    --fs-surface: #1E2225;
+    --fs-surface-2: #272B2E;
+    --fs-ink: #F2F3F1;
+    --fs-ink-2: #B7B8B3;
+    --fs-ink-3: #8B8D89;
+    --fs-rule: #33373A;
+    --fs-rule-soft: #292D30;
+    --fs-accent: #A3D65C;
+    --fs-accent-soft: #26331A;
+    --fs-accent-fg: #22301A;
+    --fs-accent-ink: #A3D65C;
+    --fs-crit: #F2726F;
+    --fs-warn: #F0B65E;
+    --fs-good: #79C267;
+    --fs-chart: #B4A8FF;
+    --fs-action2: #F2F3F1;
+    --fs-action2-fg: #15181B;
+    --fs-shadow: 0 1px 2px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.45);
+  }
+}
+
+body { background: var(--fs-ground); color: var(--fs-ink); }
+
+/* Hint native form controls (date pickers, scrollbars, search-field chrome)
+   to render in the matching palette instead of defaulting to light. */
+:root { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) { color-scheme: dark; }
+}
