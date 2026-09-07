@@ -8,12 +8,28 @@ const routes = [
   { path: "/performance", name: "Performance", component: () => import("@/views/Performance.vue") },
   { path: "/notifications", name: "Notifications", component: () => import("@/views/Notifications.vue") },
   { path: "/profile", name: "Profile", component: () => import("@/views/Profile.vue") },
+  { path: "/settings", name: "Settings", component: () => import("@/views/Settings.vue") },
 
   // Field Visit
   { path: "/visits", name: "VisitList", component: () => import("@/views/field_visit/List.vue") },
   { path: "/visits/new", name: "VisitNew", component: () => import("@/views/field_visit/Form.vue") },
   { path: "/visits/:name", name: "VisitDetail", component: () => import("@/views/field_visit/Detail.vue"), props: true },
   { path: "/visits/:name/edit", name: "VisitEdit", component: () => import("@/views/field_visit/Form.vue"), props: true },
+
+  // Journey Plan - a hub bundling Trip Plan alongside the other travel-
+  // adjacent requests (Sample Requisition, Visit Plan, Marketing Collaterals),
+  // matching the Requisitions hub pattern below.
+  { path: "/journey-plan", name: "JourneyPlanHub", component: () => import("@/views/journey_plan/Hub.vue") },
+  { path: "/journey-plan/trips", name: "JourneyPlanList", component: () => import("@/views/journey_plan/List.vue") },
+  { path: "/journey-plan/new", name: "JourneyPlanNew", component: () => import("@/views/journey_plan/Form.vue") },
+  { path: "/journey-plan/expense-claim/new", name: "ExpenseClaimNew", component: () => import("@/views/expense_claim/Form.vue") },
+  { path: "/journey-plan/report", name: "JourneyPlanVisitReport", component: () => import("@/views/journey_plan/Report.vue") },
+  { path: "/journey-plan/:name", name: "JourneyPlanDetail", component: () => import("@/views/journey_plan/Detail.vue"), props: true },
+
+  // Trial Plan
+  { path: "/trial-plan", name: "TrialPlanList", component: () => import("@/views/trial_plan/List.vue") },
+  { path: "/trial-plan/new", name: "TrialPlanNew", component: () => import("@/views/trial_plan/Form.vue") },
+  { path: "/trial-plan/:name", name: "TrialPlanDetail", component: () => import("@/views/trial_plan/Detail.vue"), props: true },
 
   // Complaints
   { path: "/complaints", name: "ComplaintList", component: () => import("@/views/complaints/List.vue") },
@@ -37,6 +53,7 @@ const routes = [
   // Customers
   { path: "/customers", name: "CustomerList", component: () => import("@/views/customers/List.vue") },
   { path: "/customers/:name", name: "CustomerDetail", component: () => import("@/views/customers/Detail.vue"), props: true },
+  { path: "/customers/:name/ledger", name: "CustomerLedger", component: () => import("@/views/customers/Ledger.vue"), props: true },
 
   // Onboarding / KYC
   { path: "/onboarding", name: "OnboardingList", component: () => import("@/views/onboarding/List.vue") },
@@ -46,9 +63,16 @@ const routes = [
   // Price list / catalogue
   { path: "/prices", name: "Catalogue", component: () => import("@/views/catalog/List.vue") },
 
-  // Orders
+  // Orders - one entry point ("New order") with a Direct Customer / Channel
+  // Partner chooser, matching Flutter's single "New Sales Order" screen with
+  // its Primary/Secondary toggle. The two flows book genuinely different
+  // doctypes (native Sales Order vs fmcg's Channel Partner Sales Order), so
+  // beyond that shared entry point they're separate wizards/details/routes.
   { path: "/orders", name: "OrderList", component: () => import("@/views/orders/List.vue") },
-  { path: "/orders/new", name: "OrderNew", component: () => import("@/views/orders/Form.vue") },
+  { path: "/orders/new", name: "OrderNew", component: () => import("@/views/orders/New.vue") },
+  { path: "/orders/new/direct", name: "OrderNewDirect", component: () => import("@/views/orders/Form.vue") },
+  { path: "/orders/new/channel-partner", name: "OrderNewChannelPartner", component: () => import("@/views/orders/ChannelPartnerForm.vue") },
+  { path: "/orders/channel-partner/:name", name: "ChannelPartnerOrderDetail", component: () => import("@/views/orders/ChannelPartnerDetail.vue"), props: true },
   { path: "/orders/:name", name: "OrderDetail", component: () => import("@/views/orders/Detail.vue"), props: true },
 
   // Schemes (read-only - native Pricing Rules)

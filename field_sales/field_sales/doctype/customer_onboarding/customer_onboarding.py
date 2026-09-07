@@ -23,6 +23,8 @@ class CustomerOnboarding(Document):
         self.set_territory()
         self.validate_business_type()
         self.validate_credit_terms()
+        self.validate_address()
+        self.validate_duplicate()
 
     def before_submit(self):
         if not self.documents:
@@ -57,6 +59,89 @@ class CustomerOnboarding(Document):
         if self.proposed_credit == "Advance":
             self.credit_days = None
             self.credit_limit = None
+
+    def validate_address(self):
+        """An outlet needs an address - either an existing Address record
+        (`location`) or enough inline detail to build a new one on approval.
+        Same either/or shape as Field Visit, just enforced as mandatory here
+        since onboarding is how a new outlet's address is registered."""
+        if self.location:
+            return
+        if not (self.address_line1 and self.city and self.state and self.pincode):
+            frappe.throw(
+                _(
+                    "Give the outlet's address: either pick an existing Address, "
+                    "or fill in address line 1, city, state and pincode."
+                )
+            )
+
+    def validate_duplicate(self):
+        """A rep with nothing stopping them can file unlimited onboarding
+        requests for the same outlet. `contact_number` is the one field that
+        is *always* present (it is mandatory) and identifies the person being
+        onboarded regardless of business_type, so it is the natural key here
+        - GSTIN is a stronger identifier when the business is registered, so
+        a match on either counts as a duplicate.
+
+        Scope decisions, in order:
+
+        - Cross-rep, not just "your own requests": the point of the check is
+          to stop the *outlet* from being onboarded twice, not to stop one
+          rep from resubmitting - two different reps chasing the same outlet
+          is exactly the case this needs to catch, since neither of them can
+          see the other's pipeline to know it is already in flight.
+        - Rejected requests do not count as duplicates: a rejection means
+          that specific request was refused (bad documents, ineligible
+          business, etc.), not that the outlet can never be onboarded again.
+          A rep must be able to re-file after fixing whatever got it
+          rejected.
+        - Cancelled requests (docstatus 2) do not count either - a
+          cancelled document is withdrawn, functionally the same as it never
+          having been filed.
+        - An *approved* request still counts as a duplicate on purpose, even
+          though the spec's "duplicate KYC" language could be read as
+          "don't let two pending requests collide". An approved onboarding
+          already has a live Customer record; filing a fresh KYC for the
+          same outlet is never the right next step for a rep who wants to
+          transact with a customer that already exists - they should be
+          referencing the existing Customer, not re-onboarding it. Blocking
+          on Approved surfaces that mistake immediately instead of silently
+          creating a second, orphaned Customer down the line.
+        """
+        if not self.contact_number:
+            return
+
+        or_filters = [["Customer Onboarding", "contact_number", "=", self.contact_number]]
+        if self.gstin:
+            or_filters.append(["Customer Onboarding", "gstin", "=", self.gstin])
+
+        filters = [
+            ["Customer Onboarding", "docstatus", "!=", 2],
+            ["Customer Onboarding", "status", "!=", "Rejected"],
+        ]
+        if self.name:
+            filters.append(["Customer Onboarding", "name", "!=", self.name])
+
+        existing = frappe.get_all(
+            "Customer Onboarding",
+            filters=filters,
+            or_filters=or_filters,
+            fields=["name", "customer_name", "status"],
+            limit=1,
+        )
+        if existing:
+            match = existing[0]
+            frappe.throw(
+                _(
+                    "This looks like a duplicate: {0} ({1}) is an existing, "
+                    "still-active onboarding request for the same contact "
+                    "number or GSTIN, with status {2}."
+                ).format(
+                    frappe.utils.get_link_to_form("Customer Onboarding", match.name),
+                    match.customer_name,
+                    match.status,
+                )
+            )
 
 
 # ---------------------------------------------------------------- approval
@@ -125,6 +210,40 @@ def _build_customer(doc: "Document") -> "Document":
     return customer
 
 
+def _build_address(customer_name: str, doc: "Document") -> "Document":
+    """A brand-new outlet's Address, built from the inline fields captured
+    at onboarding - this IS how a new address gets registered, so it must
+    not require one to already exist."""
+    addr = frappe.new_doc("Address")
+    addr.address_title = doc.customer_name
+    addr.address_type = "Billing"
+    addr.address_line1 = doc.address_line1
+    addr.address_line2 = doc.address_line2
+    # On this site (india_compliance installed) several Address fields that
+    # look like free text on a clean Frappe install - city, district - are
+    # actually Links to India-specific master doctypes (City, District). Our
+    # own inline fields stay plain Data, since a rep in the field cannot be
+    # expected to know whether a master record exists yet for the place
+    # they're standing in. Only carry a value across when it actually
+    # resolves as a Link target; a value that doesn't resolve is dropped
+    # rather than failing the whole approval over an optional field.
+    for fieldname, value in (("city", doc.city), ("district", doc.district)):
+        if not value:
+            continue
+        field = addr.meta.get_field(fieldname)
+        if not field:
+            continue
+        if field.fieldtype == "Link" and not frappe.db.exists(field.options, value):
+            continue
+        addr.set(fieldname, value)
+    addr.state = doc.state
+    addr.pincode = doc.pincode
+    addr.append("links", {"link_doctype": "Customer", "link_name": customer_name})
+    addr.flags.ignore_mandatory = True
+    addr.insert(ignore_permissions=True)
+    return addr
+
+
 def _link_contact_and_address(customer_name: str, doc: "Document") -> None:
     if doc.location:
         addr = frappe.get_doc("Address", doc.location)
@@ -134,6 +253,10 @@ def _link_contact_and_address(customer_name: str, doc: "Document") -> None:
             addr.save(ignore_permissions=True)
         frappe.db.set_value("Customer", customer_name, "customer_primary_address",
                             doc.location, update_modified=False)
+    elif doc.address_line1:
+        addr = _build_address(customer_name, doc)
+        frappe.db.set_value("Customer", customer_name, "customer_primary_address",
+                            addr.name, update_modified=False)
 
     if doc.contact_number:
         contact = frappe.new_doc("Contact")

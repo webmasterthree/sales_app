@@ -1,0 +1,289 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-08-28 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "sec_party",
+  "visit_type",
+  "customer",
+  "customer_name",
+  "channel_partner",
+  "contact_person",
+  "contact_number",
+  "cb_party",
+  "item_code",
+  "item_name",
+  "delivery_date",
+  "sec_owner",
+  "sales_person",
+  "sales_person_name",
+  "cb_owner",
+  "territory",
+  "field_visit",
+  "sec_checklist",
+  "sample_distributed",
+  "feedback_collected",
+  "cb_checklist",
+  "follow_up_order",
+  "sec_status",
+  "status",
+  "remarks",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "default": "FTP-.YYYY.-.MM.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "FTP-.YYYY.-.MM.-.#####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sec_party",
+   "fieldtype": "Section Break",
+   "label": "Who"
+  },
+  {
+   "default": "Primary",
+   "description": "Primary: a trial run directly with the customer above. Secondary: run through a channel partner, which then requires the Channel Partner field below - the same distinction Field Visit uses.",
+   "fieldname": "visit_type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Customer Type",
+   "options": "Primary\nSecondary",
+   "reqd": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "customer.customer_name",
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Customer Name",
+   "read_only": 1
+  },
+  {
+   "description": "Required for a Secondary trial. The channel partner's Customer record - distinct from the direct customer above.",
+   "fieldname": "channel_partner",
+   "fieldtype": "Link",
+   "label": "Channel Partner",
+   "mandatory_depends_on": "eval:doc.visit_type=='Secondary'",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "contact_person",
+   "fieldtype": "Link",
+   "label": "Contact",
+   "options": "Contact"
+  },
+  {
+   "fieldname": "contact_number",
+   "fieldtype": "Data",
+   "label": "Contact Number"
+  },
+  {
+   "fieldname": "cb_party",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "label": "Product on Trial",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "item_code.item_name",
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Product Name",
+   "read_only": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "delivery_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Delivery Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sec_owner",
+   "fieldtype": "Section Break",
+   "label": "Ownership"
+  },
+  {
+   "fieldname": "sales_person",
+   "fieldtype": "Link",
+   "label": "Requested By",
+   "options": "Employee",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "sales_person.employee_name",
+   "fieldname": "sales_person_name",
+   "fieldtype": "Data",
+   "label": "Requested By Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb_owner",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "territory",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Territory",
+   "options": "Territory",
+   "reqd": 1
+  },
+  {
+   "description": "The visit that led to this trial, if any.",
+   "fieldname": "field_visit",
+   "fieldtype": "Link",
+   "label": "From Visit",
+   "options": "Field Visit"
+  },
+  {
+   "fieldname": "sec_checklist",
+   "fieldtype": "Section Break",
+   "label": "Attendance"
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "0",
+   "fieldname": "sample_distributed",
+   "fieldtype": "Check",
+   "label": "Sample distributed"
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "0",
+   "fieldname": "feedback_collected",
+   "fieldtype": "Check",
+   "label": "Customer feedback collected"
+  },
+  {
+   "fieldname": "cb_checklist",
+   "fieldtype": "Column Break"
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Linked once a real order follows the trial - not a checkbox, since the app already has the order itself to point to.",
+   "fieldname": "follow_up_order",
+   "fieldtype": "Link",
+   "label": "Follow-up Order",
+   "options": "Sales Order"
+  },
+  {
+   "fieldname": "sec_status",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Scheduled",
+   "description": "Moves to Completed on its own once the trial is submitted and all three attendance items above are done.",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Scheduled\nCompleted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Field Trial Plan",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-08-28 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Field Sales",
+ "name": "Field Trial Plan",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Executive App",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Sales Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "search_fields": "delivery_date,customer_name,item_name,sales_person_name,status",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "customer_name",
+ "track_changes": 1
+}

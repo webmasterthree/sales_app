@@ -10,10 +10,12 @@
   "naming_series",
   "sec_party",
   "party_type",
+  "visit_type",
   "customer",
   "customer_name",
   "prospect_name",
   "outlet_name",
+  "channel_partner",
   "cb_party",
   "visit_date",
   "visit_time",
@@ -26,6 +28,7 @@
   "location",
   "address_line1",
   "address_line2",
+  "district",
   "city",
   "cb_location",
   "state",
@@ -47,6 +50,9 @@
   "pitched_items",
   "sec_consumption",
   "consumption",
+  "sec_trial",
+  "has_trial_plan",
+  "trial_items",
   "sec_demo",
   "demo_requested",
   "demo_location",
@@ -96,6 +102,16 @@
    "reqd": 1
   },
   {
+   "default": "Primary",
+   "description": "Primary: a direct call on the customer/prospect above. Secondary: a call made through, or about, a channel partner - which then requires the Channel Partner field below.",
+   "fieldname": "visit_type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Visit Type",
+   "options": "Primary\nSecondary",
+   "reqd": 1
+  },
+  {
    "depends_on": "eval:doc.party_type=='Customer'",
    "fieldname": "customer",
    "fieldtype": "Link",
@@ -123,6 +139,14 @@
    "fieldname": "outlet_name",
    "fieldtype": "Data",
    "label": "Outlet"
+  },
+  {
+   "description": "Required for a Secondary visit. The channel partner's Customer record - distinct from the direct customer/prospect above.",
+   "fieldname": "channel_partner",
+   "fieldtype": "Link",
+   "label": "Channel Partner",
+   "mandatory_depends_on": "eval:doc.visit_type=='Secondary'",
+   "options": "Customer"
   },
   {
    "fieldname": "cb_party",
@@ -198,6 +222,12 @@
    "fieldname": "address_line2",
    "fieldtype": "Data",
    "label": "Address Line 2"
+  },
+  {
+   "fetch_from": "location.district",
+   "fieldname": "district",
+   "fieldtype": "Data",
+   "label": "District"
   },
   {
    "fetch_from": "location.city",
@@ -327,6 +357,25 @@
    "fieldtype": "Table",
    "label": "Consumption",
    "options": "Field Visit Consumption"
+  },
+  {
+   "fieldname": "sec_trial",
+   "fieldtype": "Section Break",
+   "label": "Trial"
+  },
+  {
+   "default": "0",
+   "description": "Checking this creates a Field Trial Plan per item below, linked back to this visit. Unchecking it (or removing an item) removes the matching draft trial - a submitted one is never touched.",
+   "fieldname": "has_trial_plan",
+   "fieldtype": "Check",
+   "label": "This visit included a trial"
+  },
+  {
+   "depends_on": "eval:doc.has_trial_plan",
+   "fieldname": "trial_items",
+   "fieldtype": "Table",
+   "label": "Trial Items",
+   "options": "Field Visit Item"
   },
   {
    "fieldname": "sec_demo",

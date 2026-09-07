@@ -58,7 +58,7 @@ const props = defineProps({
   readonly: { type: Boolean, default: false },
   preview: { type: Boolean, default: true },
 })
-const emit = defineEmits(["update:modelValue", "uploaded"])
+const emit = defineEmits(["update:modelValue", "uploaded", "uploading-change"])
 
 const uploading = ref(false)
 const progress = ref(0)
@@ -67,12 +67,22 @@ const error = ref("")
 const isImage = computed(() => /\.(png|jpe?g|gif|webp)(\?|$)/i.test(props.modelValue || ""))
 const fileName = computed(() => (props.modelValue || "").split("/").pop())
 
+// A parent form's final submit only ever checks its own form data - it has
+// no way to see this component's in-flight upload. Without surfacing that
+// as an event, a rep who taps "Create"/"Submit" right after picking a photo
+// (routine on a slow connection) submits before the model value is set:
+// the file lands in the File doctype but never gets linked to the record.
+function setUploading(v) {
+  uploading.value = v
+  emit("uploading-change", v)
+}
+
 async function onPick(e) {
   const file = e.target.files?.[0]
   e.target.value = ""
   if (!file) return
   error.value = ""
-  uploading.value = true
+  setUploading(true)
   progress.value = 0
   try {
     const result = await uploadFile({
@@ -87,7 +97,7 @@ async function onPick(e) {
   } catch (err) {
     error.value = err.message || "Upload failed."
   } finally {
-    uploading.value = false
+    setUploading(false)
   }
 }
 

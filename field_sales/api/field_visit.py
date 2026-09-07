@@ -9,7 +9,7 @@ assembled by string formatting, with the territory filter pasted in as text.
 
 import frappe
 
-from field_sales import uploads
+from field_sales import geo, uploads
 from field_sales.api.listing import ListConfig, paginated_list
 
 LIST_CONFIG = ListConfig(
@@ -17,6 +17,8 @@ LIST_CONFIG = ListConfig(
     fields=[
         "name",
         "party_type",
+        "visit_type",
+        "channel_partner",
         "customer",
         "customer_name",
         "prospect_name",
@@ -34,10 +36,12 @@ LIST_CONFIG = ListConfig(
         "onboarding_status",
         "workflow_state",
         "docstatus",
+        "shop_photo",
     ],
     search_fields=["name", "customer_name", "prospect_name", "outlet_name", "contact_number"],
     filter_fields={
         "party_type": "party_type",
+        "visit_type": "visit_type",
         "order_status": "order_status",
         "onboarding_status": "onboarding_status",
         "customer": "customer",
@@ -64,6 +68,73 @@ def visit_list():
 
 
 @frappe.whitelist()
+def reason_list():
+    """Active 'Without Order' reasons, for the visit form's picker."""
+    return frappe.get_all(
+        "Field Reason",
+        filters={"applies_to": "Visit", "disabled": 0},
+        fields=["name", "reason"],
+        order_by="reason asc",
+    )
+
+
+@frappe.whitelist()
+def segment_list():
+    """Segment options for the pitched-items picker - the real doctype
+    items are tagged with (Item.segment -> Segment Mapping -> Segment),
+    not Application Segment, which nothing in the catalogue actually uses."""
+    return frappe.get_all("Segment", fields=["name"], order_by="name asc")
+
+
+@frappe.whitelist()
+def competitor_list(search_text: str | None = None, limit: int = 20):
+    """Competitor options, for the pitched-items picker. The master has no
+    size guardrail of its own - competitor rows accumulate across brands and
+    regions - so this is searchable rather than returning every row."""
+    filters = {}
+    if search_text:
+        filters["name"] = ["like", f"%{search_text}%"]
+    try:
+        page_size = int(limit)
+    except (TypeError, ValueError):
+        page_size = 20
+    return frappe.get_all(
+        "Competitor", filters=filters, fields=["name"],
+        order_by="name asc", limit_page_length=page_size or 20,
+    )
+
+
+@frappe.whitelist()
+def uom_list():
+    """UOM options, for the consumption entry picker."""
+    return frappe.get_all("UOM", fields=["name"], order_by="name asc")
+
+
+@frappe.whitelist(methods=["POST"])
+def set_outlet_location(address: str, latitude: float, longitude: float):
+    """A rep drops a pin on the map to correct/set exactly where an outlet
+    is - the same fs_latitude/fs_longitude fields geo.anchor_address writes
+    automatically from a first check-in, but set explicitly here rather
+    than waiting on that to happen by accident.
+
+    Reps have no general write permission on Address (shared master data
+    used well beyond this app), the same way the automatic anchor-on-first-
+    check-in has none either - see geo.anchor_address, called unconditionally
+    from an already-permission-gated check_in. Read permission is the
+    equivalent gate here: if a rep can already see this address (every
+    visit's customer lookup returns it), recording where its pin actually
+    sits is a correction to data they're already trusted to view, not a new
+    grant.
+    """
+    if not frappe.has_permission("Address", "read", doc=address):
+        raise frappe.PermissionError
+    if not geo.is_valid_position(latitude, longitude):
+        frappe.throw(frappe._("That is not a usable map position."))
+    geo.anchor_address(address, latitude, longitude)
+    return {"address": address, "latitude": frappe.utils.flt(latitude), "longitude": frappe.utils.flt(longitude)}
+
+
+@frappe.whitelist()
 def visit(name: str):
     """One visit, with its child tables."""
     doc = frappe.get_doc("Field Visit", name)
@@ -80,9 +151,11 @@ def visit(name: str):
 # order rates.
 WRITABLE_FIELDS = {
     "party_type",
+    "visit_type",
     "customer",
     "prospect_name",
     "outlet_name",
+    "channel_partner",
     "contact_person",
     "contact_number",
     "visit_date",
@@ -90,6 +163,7 @@ WRITABLE_FIELDS = {
     "location",
     "address_line1",
     "address_line2",
+    "district",
     "city",
     "state",
     "pincode",
@@ -105,11 +179,13 @@ WRITABLE_FIELDS = {
     "customer_update_requested",
     "lead",
     "opportunity",
+    "has_trial_plan",
 }
 
 WRITABLE_TABLES = {
     "pitched_items": {"item_code", "qty", "uom", "segment", "competitor", "remarks"},
     "consumption": {"product_name", "monthly_qty", "uom", "segment", "grade"},
+    "trial_items": {"item_code", "qty", "uom", "segment", "remarks"},
 }
 
 
@@ -134,6 +210,53 @@ def _own_employee() -> str | None:
     return frappe.db.get_value(
         "Employee", {"user_id": frappe.session.user, "status": "Active"}, "name"
     )
+
+
+def sync_trial_plans(visit) -> None:
+    """Mirrors mohan_impex's CustomerVisitManagement.trial_plan(): checking
+    "this visit included a trial" and listing items on it materialises one
+    Field Trial Plan per item, linked back to the visit via `field_visit`.
+    Unchecking it, or removing an item, removes the matching *draft* trial -
+    a trial someone has already submitted or acted on is never touched here,
+    the same way the legacy version only deleted its single linked Trial
+    Plan while it was still being edited alongside the visit.
+
+    Only meaningful for an actual Customer visit - Field Trial Plan.customer
+    is a mandatory Link, and a Prospect has no Customer record yet to trial
+    anything against.
+    """
+    if visit.party_type != "Customer" or not visit.customer:
+        return
+
+    existing = frappe.get_all(
+        "Field Trial Plan",
+        filters={"field_visit": visit.name, "docstatus": 0},
+        fields=["name", "item_code"],
+    )
+    existing_by_item = {row.item_code: row.name for row in existing}
+
+    wanted_items = {row.item_code for row in (visit.trial_items or []) if row.item_code}
+    if not visit.has_trial_plan:
+        wanted_items = set()
+
+    for item_code, name in existing_by_item.items():
+        if item_code not in wanted_items:
+            frappe.delete_doc("Field Trial Plan", name, ignore_permissions=True)
+
+    for item_code in wanted_items:
+        if item_code in existing_by_item:
+            continue
+        trial = frappe.new_doc("Field Trial Plan")
+        trial.update({
+            "customer": visit.customer,
+            "item_code": item_code,
+            "delivery_date": visit.visit_date,
+            "field_visit": visit.name,
+            "sales_person": visit.sales_person,
+            "territory": visit.territory,
+            "remarks": frappe._("Auto-created from visit {0}.").format(visit.name),
+        })
+        trial.insert(ignore_permissions=True)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -161,6 +284,7 @@ def create_visit(**payload):
     doc.insert()
 
     uploads.link_uploaded_file(doc.shop_photo, "Field Visit", doc.name, "shop_photo")
+    sync_trial_plans(doc)
 
     return {"name": doc.name, "docstatus": doc.docstatus}
 
@@ -179,6 +303,7 @@ def update_visit(name: str, **payload):
 
     _apply_payload(doc, payload)
     doc.save()
+    sync_trial_plans(doc)
     return {"name": doc.name, "docstatus": doc.docstatus}
 
 

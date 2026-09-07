@@ -19,7 +19,7 @@
         ><Icon :name="tab.icon" :size="isActive(tab.name) ? 20 : 18" /></span>
         <span class="sr-only">{{ tab.label }}</span>
         <span
-          v-if="tab.name === 'Notifications' && unread > 0"
+          v-if="tab.name === 'Home' && unread > 0"
           class="absolute top-1 right-4 min-w-[16px] h-4 px-1 rounded-full bg-crit text-white text-[10px] flex items-center justify-center"
         >{{ unread > 9 ? '9+' : unread }}</span>
       </RouterLink>
@@ -37,8 +37,8 @@ const unread = unreadCount
 
 const tabs = [
   { name: "Home", label: "Home", icon: "home" },
-  { name: "Performance", label: "Performance", icon: "bar-chart" },
-  { name: "Notifications", label: "Alerts", icon: "bell" },
+  { name: "Reports", label: "Reports", icon: "bar-chart" },
+  { name: "Settings", label: "Settings", icon: "settings" },
   { name: "Profile", label: "Profile", icon: "user" },
 ]
 

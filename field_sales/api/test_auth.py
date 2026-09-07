@@ -216,6 +216,61 @@ class TestFieldSalesAuth(FrappeTestCase):
         self.assertEqual(payload["user"], self.alice)
         self.assertIsInstance(payload["roles"], list)
 
+    # ------------------------------------------------------------ update_profile
+
+    def test_update_profile_requires_authentication(self):
+        frappe.set_user("Guest")
+        try:
+            with self.assertRaises(frappe.AuthenticationError):
+                auth.update_profile(mobile_no="9999999999")
+        finally:
+            frappe.set_user("Administrator")
+
+    def test_update_profile_writes_allowlisted_fields(self):
+        frappe.set_user(self.alice)
+        try:
+            result = auth.update_profile(
+                first_name="Alicia",
+                mobile_no="9876543210",
+                phone="9123456789",
+                mute_sounds=1,
+            )
+        finally:
+            frappe.set_user("Administrator")
+
+        self.assertEqual(result["first_name"], "Alicia")
+        self.assertEqual(result["mobile_no"], "9876543210")
+        self.assertEqual(result["phone"], "9123456789")
+        self.assertEqual(frappe.db.get_value("User", self.alice, "first_name"), "Alicia")
+
+    def test_update_profile_only_ever_touches_the_caller(self):
+        """The endpoint must never be able to edit someone else's record."""
+        frappe.db.set_value("User", self.bob, "mobile_no", "0000000000")
+
+        frappe.set_user(self.alice)
+        try:
+            auth.update_profile(name=self.bob, user=self.bob, mobile_no="1111111111")
+        finally:
+            frappe.set_user("Administrator")
+
+        self.assertEqual(frappe.db.get_value("User", self.alice, "mobile_no"), "1111111111")
+        self.assertEqual(frappe.db.get_value("User", self.bob, "mobile_no"), "0000000000")
+
+    def test_update_profile_ignores_permission_relevant_fields(self):
+        """Roles, email and username are never on the allow-list."""
+        self.assertNotIn("roles", auth.WRITABLE_PROFILE_FIELDS)
+        self.assertNotIn("email", auth.WRITABLE_PROFILE_FIELDS)
+        self.assertNotIn("username", auth.WRITABLE_PROFILE_FIELDS)
+        self.assertNotIn("user_type", auth.WRITABLE_PROFILE_FIELDS)
+
+        frappe.set_user(self.alice)
+        try:
+            auth.update_profile(email="hijacked@example.com", user_type="System User")
+        finally:
+            frappe.set_user("Administrator")
+
+        self.assertEqual(frappe.db.get_value("User", self.alice, "email"), self.alice)
+
     # ------------------------------------------------------------ helpers
 
     def _issue(self, user: str) -> str:

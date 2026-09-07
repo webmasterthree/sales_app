@@ -6,7 +6,13 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import nowdate
 
-from field_sales.api.demo import DEMO_CONFIG, EVALUATION_CONFIG
+from field_sales.api.demo import (
+    DEMO_CONFIG,
+    EVALUATION_CONFIG,
+    create_demo,
+    submit_demo,
+    submit_evaluation,
+)
 from field_sales.api.listing import paginated_list
 from field_sales.field_sales.doctype.demo_evaluation.demo_evaluation import summarise
 
@@ -149,6 +155,25 @@ class TestProductDemo(FrappeTestCase):
             user="Administrator")
         self.assertEqual(result["total_count"], 0)
 
+    def test_create_demo_accepts_a_contact(self):
+        """Spec: "Customer, contact and location are required" - Product
+        Demo had no contact field at all before this."""
+        frappe.set_user("ravi.tsm@demo.local")
+        try:
+            result = create_demo(
+                party_type="Customer",
+                customer=self.customer,
+                demo_date=nowdate(),
+                demo_location="On Site",
+                conducted_by="Self",
+                contact_number="9830055555",
+                items=[{"item_code": self.item, "qty": 5, "uom": "Kg"}],
+            )
+        finally:
+            frappe.set_user("Administrator")
+        doc = frappe.get_doc("Product Demo", result["name"])
+        self.assertEqual(doc.contact_number, "9830055555")
+
     # ------------------------------------------------------------ scorecard
 
     def test_a_rating_parameter_needs_a_rating(self):
@@ -225,6 +250,49 @@ class TestProductDemo(FrappeTestCase):
         ev = self._evaluation(demo)
         demo.reload()
         self.assertEqual(demo.items[0].evaluation, ev.name)
+
+    # ------------------------------------------------------------ completion
+
+    def test_submitting_an_evaluation_completes_a_submitted_demo(self):
+        """"Trial can be marked Completed after result entry" - filing the
+        scorecard through the real submit_evaluation endpoint (not just
+        inserting a Demo Evaluation directly) is what should flip the
+        parent's status, with no separate client call."""
+        demo = self._demo()
+        demo.submit()
+        ev = self._evaluation(demo)
+        submit_evaluation(ev.name)
+        demo.reload()
+        self.assertEqual(demo.status, "Completed")
+
+    def test_submitting_an_evaluation_against_a_draft_demo_does_not_complete_it(self):
+        """create_evaluation does not itself require the demo to be
+        submitted - but auto-completing a still-draft demo would let it skip
+        being submitted at all, the same shortcut approve_onboarding closes
+        off for Customer Onboarding."""
+        demo = self._demo()
+        ev = self._evaluation(demo)
+        submit_evaluation(ev.name)
+        demo.reload()
+        self.assertNotEqual(demo.status, "Completed")
+
+    def test_a_second_evaluation_does_not_error_on_an_already_completed_demo(self):
+        demo = self._demo()
+        demo.append("items", {"item_code": self.item, "qty": 2, "uom": "Kg"})
+        demo.save()
+        demo.submit()
+        ev1 = self._evaluation(demo)
+        submit_evaluation(ev1.name)
+        demo.reload()
+        self.assertEqual(demo.status, "Completed")
+
+        other_item = frappe.db.get_value(
+            "Item", {"is_sales_item": 1, "name": ["!=", self.item]}, "name"
+        ) or self.item
+        ev2 = self._evaluation(demo, item_code=other_item)
+        submit_evaluation(ev2.name)  # no exception
+        demo.reload()
+        self.assertEqual(demo.status, "Completed")
 
     # ------------------------------------------------------------ summary
 

@@ -23,6 +23,8 @@ DEMO_CONFIG = ListConfig(
         "customer_name",
         "prospect_name",
         "outlet_name",
+        "contact_person",
+        "contact_number",
         "conducted_by",
         "specialist",
         "sales_person",
@@ -124,7 +126,14 @@ DEMO_WRITABLE_FIELDS = {
     "customer",
     "prospect_name",
     "outlet_name",
+    "contact_person",
+    "contact_number",
     "location",
+    "address_line1",
+    "address_line2",
+    "city",
+    "state",
+    "pincode",
     "demo_date",
     "demo_time",
     "demo_location",
@@ -326,4 +335,27 @@ def submit_evaluation(name: str):
         frappe.throw(frappe._("Say whether the demo was successful before finishing it."))
 
     doc.save()
+    _complete_demo_if_submitted(doc)
     return {"name": doc.name, "outcome": doc.outcome}
+
+
+def _complete_demo_if_submitted(evaluation) -> None:
+    """"Trial can be marked Completed after result entry" - filing a
+    scorecard IS the result entry the spec means, so once one lands the
+    parent Product Demo should move to Completed on its own, server-side,
+    rather than needing a second client call.
+
+    Gated on the demo actually being submitted (docstatus 1): create_evaluation
+    does not itself require the demo it scores to be submitted, but jumping a
+    still-draft demo straight to "Completed" would let it skip being
+    submitted at all - the same shortcut approve_onboarding in
+    customer_onboarding.py is careful to close off for Customer Onboarding.
+    Also a no-op once the demo is already Completed, so filing more than one
+    evaluation against multi-item demo does not re-trigger anything.
+    """
+    if not evaluation.product_demo:
+        return
+    demo_doc = frappe.get_doc("Product Demo", evaluation.product_demo)
+    if demo_doc.docstatus != 1 or demo_doc.status == "Completed":
+        return
+    demo_doc.db_set("status", "Completed")

@@ -14,8 +14,15 @@
   "customer_name",
   "prospect_name",
   "outlet_name",
+  "contact_person",
+  "contact_number",
   "location",
+  "address_line1",
+  "address_line2",
+  "city",
   "cb_party",
+  "state",
+  "pincode",
   "demo_date",
   "demo_time",
   "demo_location",
@@ -90,14 +97,62 @@
    "label": "Outlet"
   },
   {
+   "fieldname": "contact_person",
+   "fieldtype": "Link",
+   "label": "Contact",
+   "options": "Contact"
+  },
+  {
+   "fieldname": "contact_number",
+   "fieldtype": "Data",
+   "label": "Contact Number"
+  },
+  {
+   "depends_on": "eval:doc.party_type=='Prospect'",
+   "description": "Optional. Only needed for a new prospect that has no Address on file yet.",
    "fieldname": "location",
    "fieldtype": "Link",
-   "label": "Address",
+   "label": "Existing Address (optional)",
    "options": "Address"
+  },
+  {
+   "depends_on": "eval:doc.party_type=='Prospect'",
+   "fetch_from": "location.address_line1",
+   "fieldname": "address_line1",
+   "fieldtype": "Data",
+   "label": "Address Line 1"
+  },
+  {
+   "depends_on": "eval:doc.party_type=='Prospect'",
+   "fetch_from": "location.address_line2",
+   "fieldname": "address_line2",
+   "fieldtype": "Data",
+   "label": "Address Line 2"
+  },
+  {
+   "depends_on": "eval:doc.party_type=='Prospect'",
+   "fetch_from": "location.city",
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "label": "City"
   },
   {
    "fieldname": "cb_party",
    "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.party_type=='Prospect'",
+   "fetch_from": "location.state",
+   "fieldname": "state",
+   "fieldtype": "Data",
+   "label": "State"
+  },
+  {
+   "depends_on": "eval:doc.party_type=='Prospect'",
+   "fetch_from": "location.pincode",
+   "fieldname": "pincode",
+   "fieldtype": "Data",
+   "label": "Pincode"
   },
   {
    "default": "Today",

@@ -8,6 +8,8 @@ never match a leaf, a missing price returned as a silent zero, and a Sales
 Order that stored whatever rate the client sent.
 """
 
+import json
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import add_days, nowdate
@@ -281,7 +283,7 @@ class TestPricing(FrappeTestCase):
 
     # ------------------------------------------------------- enforcement
 
-    def _sales_order(self, rate):
+    def _sales_order(self, rate, **item_overrides):
         so = frappe.new_doc("Sales Order")
         so.update({
             "customer": self.customer, "company": self.company,
@@ -289,10 +291,12 @@ class TestPricing(FrappeTestCase):
             "delivery_date": add_days(nowdate(), 7),
             "currency": "INR", "selling_price_list": PRICE_LIST,
         })
-        so.append("items", {
+        row = {
             "item_code": self.item, "qty": 10, "rate": rate,
             "delivery_date": add_days(nowdate(), 7),
-        })
+        }
+        row.update(item_overrides)
+        so.append("items", row)
         so.flags.ignore_mandatory = True
         return so
 
@@ -310,10 +314,133 @@ class TestPricing(FrappeTestCase):
         pricing.enforce_sales_order_rates(so)
         self.assertEqual(flt_(so.items[0].rate), 450.0)
 
-    def test_enforcement_refuses_to_price_at_zero(self):
+    def test_enforcement_populates_the_native_pricing_rules_field(self):
+        """Sales Order Item.pricing_rules is core ERPNext's own field (used
+        by the desk item grid's "view applied pricing rules" icon and by
+        anything else reading the standard field rather than our own
+        custom_pricing_rules_applied) - it has to carry the same shape
+        ERPNext's own pricing_rule.py writes: a JSON array of rule names.
+
+        Set on before_save, not before_validate, alongside
+        enforce_sales_order_rates - see restore_native_pricing_rules_field's
+        own docstring for why: ERPNext's own validate() unconditionally
+        blanks pricing_rules back out whenever ignore_pricing_rule is set,
+        so anything written before validate() runs never survives it."""
+        self._price()
+        self._rule("FS Test Neutral")
         so = self._sales_order(rate=1)
+        pricing.enforce_sales_order_rates(so)
+        pricing.restore_native_pricing_rules_field(so)
+        self.assertEqual(json.loads(so.items[0].pricing_rules), ["FS Test Neutral"])
+
+    def test_no_matching_rule_leaves_the_native_field_empty(self):
+        self._price()
+        so = self._sales_order(rate=1)
+        pricing.enforce_sales_order_rates(so)
+        pricing.restore_native_pricing_rules_field(so)
+        self.assertEqual(so.items[0].pricing_rules, "")
+
+    def test_the_native_field_survives_a_real_insert(self):
+        """The two unit tests above call enforce_sales_order_rates and
+        restore_native_pricing_rules_field directly, in the right order -
+        this one goes through frappe's actual save lifecycle (both hooks
+        fire the way hooks.py wires them, via before_validate then
+        before_save) to prove the field really does survive ERPNext's own
+        validate(), not just this file's own call order."""
+        self._price()
+        self._rule("FS Test Neutral")
+        so = self._sales_order(rate=1)
+        so.insert(ignore_permissions=True)
+        try:
+            self.assertEqual(json.loads(so.items[0].pricing_rules), ["FS Test Neutral"])
+            stored = frappe.db.get_value("Sales Order Item", so.items[0].name, "pricing_rules")
+            self.assertEqual(json.loads(stored), ["FS Test Neutral"])
+        finally:
+            frappe.delete_doc("Sales Order", so.name, force=True, ignore_permissions=True)
+
+    def test_enforcement_refuses_to_price_at_zero(self):
+        """rate=0 (unset) means the rep didn't enter one - unlike a nonzero
+        manual rate (see the manual-rate tests below), that's still refused
+        rather than silently booked at zero."""
+        so = self._sales_order(rate=0)
         with self.assertRaises(frappe.ValidationError):
             pricing.enforce_sales_order_rates(so)
+
+    # ------------------------------------------------------- manual rate
+    #
+    # No custom field for this - Sales Order Item.rate is the standard field
+    # ERPNext already ships. A client-sent rate is normally worthless (every
+    # other test above proves it gets overwritten) - it only ever survives
+    # once calculate_rate has already raised PriceNotFound for that item, at
+    # which point there's genuinely nothing else to book against.
+
+    def test_a_manual_rate_is_ignored_when_a_real_price_exists(self):
+        """The headline defect this whole function exists to prevent, still
+        holding for the one row where a client-sent rate is ever read at
+        all: it can't be used to undercut a price that does exist."""
+        self._price()
+        so = self._sales_order(rate=1)
+        pricing.enforce_sales_order_rates(so)
+        self.assertEqual(flt_(so.items[0].rate), LIST_RATE)
+
+    def test_a_manual_rate_fills_a_genuine_price_gap(self):
+        so = self._sales_order(rate=99)
+        pricing.enforce_sales_order_rates(so)
+        self.assertEqual(flt_(so.items[0].rate), 99.0)
+
+    # ------------------------------------------------------- rule caching
+    #
+    # Production has ~1,200 active selling Pricing Rules. find_pricing_rules
+    # used to re-fetch all of them, plus one extra query per rule to check
+    # its item-code restriction, on every single call - so pricing a
+    # multi-item order meant thousands of queries. _active_selling_rules
+    # caches that per request; these tests exist because a cache is only
+    # safe if it's invalidated the moment the thing it cached changes.
+
+    def test_a_new_rule_is_seen_without_restarting_the_request(self):
+        """Covered implicitly by every other rule test in this file
+        (each creates its rule then immediately prices against it) - this
+        one names the actual behaviour being relied on: inserting a Pricing
+        Rule must invalidate the cache, not just updating an existing one."""
+        self._price()
+        pricing.calculate_rate(self.item, customer=self.customer, price_list=PRICE_LIST)
+        self._rule("FS Test Freshly Created")
+        result = pricing.calculate_rate(self.item, customer=self.customer, price_list=PRICE_LIST)
+        self.assertEqual(result["final_rate"], 450.0)
+
+    def test_a_disabled_rule_stops_applying_immediately(self):
+        self._price()
+        name = self._rule("FS Test Then Disabled")
+        pricing.calculate_rate(self.item, customer=self.customer, price_list=PRICE_LIST)  # warms the cache
+
+        frappe.db.set_value("Pricing Rule", name, "disable", 1)
+        frappe.get_doc("Pricing Rule", name).run_method("on_update")  # what the real save() does
+
+        result = pricing.calculate_rate(self.item, customer=self.customer, price_list=PRICE_LIST)
+        self.assertEqual(result["final_rate"], LIST_RATE)
+
+    def test_item_restrictions_do_not_leak_between_rules(self):
+        """The batched Pricing Rule Item Code lookup groups rows by their
+        own parent - a rule restricted to a different item must not leak
+        onto this one just because both were fetched in the same query."""
+        hsn = frappe.get_all("GST HSN Code", limit=1, pluck="name")
+        cat = frappe.get_all("Item Category", limit=1, pluck="name")
+        other_item = ensure("Item", "FS-TEST-ITEM-002", {
+            "item_code": "FS-TEST-ITEM-002", "item_name": "FS Test Item Two",
+            "item_group": "All Item Groups", "stock_uom": "Kg",
+            "is_stock_item": 0, "is_sales_item": 1,
+            "gst_hsn_code": hsn[0] if hsn else None,
+            "item_category": cat[0] if cat else None,
+        })
+        self._price()
+        rule = frappe.get_doc("Pricing Rule", self._rule("FS Test Only Item Two"))
+        rule.items = []
+        rule.append("items", {"item_code": other_item})
+        rule.flags.ignore_mandatory = True
+        rule.save(ignore_permissions=True)
+
+        result = pricing.calculate_rate(self.item, customer=self.customer, price_list=PRICE_LIST)
+        self.assertEqual(result["final_rate"], LIST_RATE, "a rule scoped to a different item must not apply here")
 
     def test_enforcement_stops_erpnext_recomputing(self):
         self._price()

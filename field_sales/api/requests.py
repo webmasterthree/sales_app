@@ -182,6 +182,18 @@ def _resolve_request_context(doc, employee: str, throw_label: str) -> None:
         frappe.throw(_("Give a territory for this {0}.").format(throw_label))
 
 
+def _require_party(doc, throw_label: str) -> None:
+    """Neither doctype's own JSON marks customer/prospect_name as mandatory,
+    and the controller for both is an empty Document subclass - so nothing
+    stopped a request saving with a blank party until the client happened to
+    collect one. The client (SampleForm.vue/CollateralForm.vue) now does,
+    but this is enforced here too rather than trusted from the client alone."""
+    if doc.party_type == "Customer" and not doc.customer:
+        frappe.throw(_("Select the customer this {0} is for.").format(throw_label))
+    if doc.party_type == "Prospect" and not doc.prospect_name:
+        frappe.throw(_("Enter a name for the prospect this {0} is for.").format(throw_label))
+
+
 @frappe.whitelist(methods=["POST"])
 def create_sample_request(**payload):
     """Start a Sample Request. The rep is always the signed-in user's own
@@ -208,10 +220,23 @@ def create_sample_request(**payload):
     doc = frappe.new_doc("Sample Request")
     doc.party_type = (payload or {}).get("party_type") or "Customer"
     _apply_request_payload(doc, payload, SAMPLE_ITEM_FIELDS)
+    _require_party(doc, "sample request")
     _resolve_request_context(doc, employee, "sample request")
     doc.insert()
 
     return {"name": doc.name, "docstatus": doc.docstatus}
+
+
+@frappe.whitelist(methods=["POST"])
+def submit_sample_request(name: str):
+    """Submit a filed Sample Request so it can actually be tracked through
+    docstatus 1, the way submit_visit/submit_onboarding/submit_demo do for
+    their own doctypes. Sample Request was already is_submittable=1 in the
+    doctype JSON; nothing ever called doc.submit() on one before this."""
+    doc = frappe.get_doc("Sample Request", name)
+    doc.check_permission("submit")
+    doc.submit()
+    return {"name": doc.name, "docstatus": doc.docstatus, "status": doc.status}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -240,7 +265,18 @@ def create_collateral_request(**payload):
     doc = frappe.new_doc("Collateral Request")
     doc.party_type = (payload or {}).get("party_type") or "Customer"
     _apply_request_payload(doc, payload, COLLATERAL_ITEM_FIELDS)
+    _require_party(doc, "collateral request")
     _resolve_request_context(doc, employee, "collateral request")
     doc.insert()
 
     return {"name": doc.name, "docstatus": doc.docstatus}
+
+
+@frappe.whitelist(methods=["POST"])
+def submit_collateral_request(name: str):
+    """Submit a filed Collateral Request. Same gap and same fix as
+    submit_sample_request above."""
+    doc = frappe.get_doc("Collateral Request", name)
+    doc.check_permission("submit")
+    doc.submit()
+    return {"name": doc.name, "docstatus": doc.docstatus, "status": doc.status}

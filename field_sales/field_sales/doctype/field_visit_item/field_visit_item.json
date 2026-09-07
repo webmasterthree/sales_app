@@ -57,10 +57,11 @@
    "fieldtype": "Column Break"
   },
   {
+   "description": "The item's real product segment (Segment doctype) - what pitched items are actually tagged with via Item's own Segment Mapping child table, not the newer, unrelated Application Segment master.",
    "fieldname": "segment",
    "fieldtype": "Link",
-   "label": "Application Segment",
-   "options": "Application Segment"
+   "label": "Segment",
+   "options": "Segment"
   },
   {
    "description": "Who currently supplies this, if anyone.",

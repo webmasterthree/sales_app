@@ -7,7 +7,7 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import nowdate
 
 from field_sales import geo
-from field_sales.api.field_visit import create_visit, submit_visit, update_visit
+from field_sales.api.field_visit import create_visit, set_outlet_location, submit_visit, update_visit
 from field_sales.field_sales.doctype.field_visit.field_visit import check_in, check_out
 
 # Kolkata, and points a known distance away
@@ -40,7 +40,17 @@ class TestFieldVisitWrite(FrappeTestCase):
         cls.reason = ensure("Field Reason", "FS Write Test Reason", {
             "reason": "FS Write Test Reason", "applies_to": "Visit",
         })
-        cls.customer = frappe.db.get_value("Customer", {}, "name")
+        # Not an arbitrary frappe.db.get_value("Customer", {}, "name") - this
+        # suite assumes a plain Primary customer with no channel partner, and
+        # picking whichever customer happens to sort first broke the moment
+        # another test module's own persistent Secondary-customer fixture
+        # (created via its own setUpClass, meant to be reused across runs
+        # the same way this file's own ensure() fixtures are) happened to
+        # sort first.
+        cls.customer = ensure("Customer", "FS Write Test Customer", {
+            "customer_name": "FS Write Test Customer",
+            "customer_group": "Commercial", "territory": "FS Write Test Area",
+        })
         cls.employee = frappe.db.get_value("Employee", {"status": "Active"}, "name")
         cls.item = frappe.db.get_value("Item", {}, "name")
         frappe.db.commit()
@@ -49,7 +59,7 @@ class TestFieldVisitWrite(FrappeTestCase):
         frappe.set_user("Administrator")
         self._cleanup()
         self.address = self._address(with_position=True)
-        self._settings(enforce=1, radius=200, behaviour="Warn", anchor=1)
+        self._settings(radius=200, behaviour="Warn", anchor=1)
         # Everything under test runs as an actual field rep: Administrator has
         # no Employee record, and the endpoints deliberately refuse to file a
         # visit against a user that is not linked to one.
@@ -89,11 +99,10 @@ class TestFieldVisitWrite(FrappeTestCase):
         doc.insert(ignore_permissions=True)
         return doc.name
 
-    def _settings(self, enforce=1, radius=200, behaviour="Warn", anchor=1):
+    def _settings(self, radius=200, behaviour="Warn", anchor=1):
         current = frappe.session.user
         frappe.set_user("Administrator")
         cfg = frappe.get_single("Field Sales Settings")
-        cfg.enforce_geofence = enforce
         cfg.geofence_radius = radius
         cfg.geofence_behaviour = behaviour
         cfg.anchor_on_first_visit = anchor
@@ -115,6 +124,118 @@ class TestFieldVisitWrite(FrappeTestCase):
         }
         payload.update(overrides)
         return payload
+
+    # ------------------------------------------------------------ visit type
+
+    def test_visit_type_defaults_to_primary(self):
+        result = create_visit(**self._payload())
+        doc = frappe.get_doc("Field Visit", result["name"])
+        self.assertEqual(doc.visit_type, "Primary")
+
+    def test_primary_visit_does_not_require_a_channel_partner(self):
+        result = create_visit(**self._payload(visit_type="Primary"))
+        doc = frappe.get_doc("Field Visit", result["name"])
+        self.assertFalse(doc.channel_partner)
+
+    def test_customer_visit_ignores_client_visit_type_and_derives_from_the_customer(self):
+        """For a Customer visit, visit_type/channel_partner are not something
+        a rep sends - they're copied from that Customer's own master record
+        (customer_level/custom_channel_partner) regardless of what the
+        client sets, the same way territory/sales_person are server-derived
+        elsewhere in this app. A client trying to claim Secondary for a
+        Primary customer is simply overridden, not rejected."""
+        other = frappe.db.get_value("Customer", {"name": ["!=", self.customer]}, "name") or self.customer
+        result = create_visit(**self._payload(visit_type="Secondary", channel_partner=other))
+        doc = frappe.get_doc("Field Visit", result["name"])
+        self.assertEqual(doc.visit_type, "Primary")
+        self.assertFalse(doc.channel_partner)
+
+    def test_a_secondary_customers_channel_partner_is_copied_onto_the_visit(self):
+        partner = frappe.db.get_value(
+            "Customer", {"name": ["!=", self.customer]}, "name"
+        ) or self.customer
+        frappe.db.set_value(
+            "Customer", self.customer,
+            {"customer_level": "Secondary", "custom_channel_partner": partner},
+        )
+        try:
+            result = create_visit(**self._payload())
+            doc = frappe.get_doc("Field Visit", result["name"])
+            self.assertEqual(doc.visit_type, "Secondary")
+            self.assertEqual(doc.channel_partner, partner)
+        finally:
+            frappe.db.set_value(
+                "Customer", self.customer,
+                {"customer_level": "Primary", "custom_channel_partner": None},
+            )
+
+    def test_secondary_prospect_visit_without_channel_partner_is_rejected(self):
+        """A Prospect has no Customer master record to derive this from, so
+        the rep still supplies visit_type/channel_partner by hand for one -
+        set_channel_partner only applies to an actual Customer visit."""
+        with self.assertRaises(frappe.ValidationError):
+            create_visit(**self._payload(
+                party_type="Prospect", customer=None, prospect_name="FS Write Test Prospect",
+                visit_type="Secondary",
+            ))
+
+    def test_secondary_prospect_visit_with_channel_partner_is_accepted(self):
+        partner = frappe.db.get_value(
+            "Customer", {"name": ["!=", self.customer]}, "name"
+        ) or self.customer
+        result = create_visit(**self._payload(
+            party_type="Prospect", customer=None, prospect_name="FS Write Test Prospect",
+            visit_type="Secondary", channel_partner=partner,
+        ))
+        doc = frappe.get_doc("Field Visit", result["name"])
+        self.assertEqual(doc.visit_type, "Secondary")
+        self.assertEqual(doc.channel_partner, partner)
+
+    # ------------------------------------------------------------ trial plan
+
+    def test_checking_has_trial_plan_creates_a_linked_trial(self):
+        result = create_visit(**self._payload(
+            has_trial_plan=1, trial_items=[{"item_code": self.item, "qty": 1, "uom": "Nos"}],
+        ))
+        trial = frappe.db.get_value(
+            "Field Trial Plan", {"field_visit": result["name"]},
+            ["customer", "item_code", "delivery_date"], as_dict=True,
+        )
+        self.assertTrue(trial)
+        self.assertEqual(trial.customer, self.customer)
+        self.assertEqual(trial.item_code, self.item)
+
+    def test_no_trial_plan_when_the_box_is_unchecked(self):
+        result = create_visit(**self._payload(
+            has_trial_plan=0, trial_items=[{"item_code": self.item, "qty": 1, "uom": "Nos"}],
+        ))
+        self.assertFalse(frappe.db.exists("Field Trial Plan", {"field_visit": result["name"]}))
+
+    def test_unchecking_has_trial_plan_removes_the_draft_trial(self):
+        result = create_visit(**self._payload(
+            has_trial_plan=1, trial_items=[{"item_code": self.item, "qty": 1, "uom": "Nos"}],
+        ))
+        self.assertTrue(frappe.db.exists("Field Trial Plan", {"field_visit": result["name"]}))
+        update_visit(result["name"], has_trial_plan=0, trial_items=[])
+        self.assertFalse(frappe.db.exists("Field Trial Plan", {"field_visit": result["name"]}))
+
+    def test_a_submitted_trial_survives_the_visit_being_edited_further(self):
+        result = create_visit(**self._payload(
+            has_trial_plan=1, trial_items=[{"item_code": self.item, "qty": 1, "uom": "Nos"}],
+        ))
+        trial_name = frappe.db.get_value("Field Trial Plan", {"field_visit": result["name"]}, "name")
+        from field_sales.api.trial_plan import submit_trial_plan
+        submit_trial_plan(trial_name)
+
+        update_visit(result["name"], has_trial_plan=0, trial_items=[])
+        self.assertTrue(frappe.db.exists("Field Trial Plan", {"name": trial_name}))
+
+    def test_prospect_visits_never_get_an_auto_trial_plan(self):
+        result = create_visit(**self._payload(
+            party_type="Prospect", customer=None, prospect_name="FS Write Test Prospect",
+            has_trial_plan=1, trial_items=[{"item_code": self.item, "qty": 1, "uom": "Nos"}],
+        ))
+        self.assertFalse(frappe.db.exists("Field Trial Plan", {"field_visit": result["name"]}))
 
     # ------------------------------------------------------------ distance
 
@@ -224,17 +345,19 @@ class TestFieldVisitWrite(FrappeTestCase):
         doc = frappe.get_doc("Field Visit", name)
         self.assertIsNone(doc.check_in)
 
-    def test_a_missing_fix_is_not_checked_rather_than_inside(self):
-        """Failing to send coordinates must not read as being at the outlet."""
+    def test_check_in_without_a_fix_is_refused(self):
+        """A GPS fix is mandatory at check-in - geofencing is always on."""
         name = create_visit(**self._payload())["name"]
-        result = check_in(name)
-        self.assertEqual(result["geofence"], "Not Checked")
-        self.assertIsNone(result["distance"])
+        with self.assertRaises(frappe.ValidationError):
+            check_in(name)
+        doc = frappe.get_doc("Field Visit", name)
+        self.assertIsNone(doc.check_in)
 
-    def test_null_island_is_not_checked(self):
+    def test_null_island_is_refused(self):
+        """(0, 0) is what a device reports when it has no real fix."""
         name = create_visit(**self._payload())["name"]
-        result = check_in(name, latitude=0, longitude=0)
-        self.assertEqual(result["geofence"], "Not Checked")
+        with self.assertRaises(frappe.ValidationError):
+            check_in(name, latitude=0, longitude=0)
 
     def test_first_visit_anchors_an_outlet_with_no_position(self):
         blank = frappe.get_doc("Address", self.address)
@@ -251,11 +374,20 @@ class TestFieldVisitWrite(FrappeTestCase):
         )
         self.assertAlmostEqual(stored.fs_latitude, NEAR[0], places=4)
 
-    def test_geofence_can_be_switched_off(self):
-        self._settings(enforce=0)
-        name = create_visit(**self._payload())["name"]
-        result = check_in(name, latitude=FAR[0], longitude=FAR[1])
-        self.assertEqual(result["geofence"], "Not Checked")
+    def test_set_outlet_location_updates_the_address_pin(self):
+        """A rep drops a pin on the New Customer Visit map to correct an
+        outlet's location directly, rather than waiting for a first
+        check-in to anchor it automatically."""
+        set_outlet_location(self.address, latitude=FAR[0], longitude=FAR[1])
+        stored = frappe.db.get_value(
+            "Address", self.address, ["fs_latitude", "fs_longitude"], as_dict=True
+        )
+        self.assertAlmostEqual(stored.fs_latitude, FAR[0], places=4)
+        self.assertAlmostEqual(stored.fs_longitude, FAR[1], places=4)
+
+    def test_set_outlet_location_refuses_an_invalid_position(self):
+        with self.assertRaises(frappe.ValidationError):
+            set_outlet_location(self.address, latitude=0, longitude=0)
 
     def test_cannot_check_in_twice(self):
         name = create_visit(**self._payload())["name"]

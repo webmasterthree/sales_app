@@ -202,6 +202,61 @@ role_home_page = {
 # every Notification Log insert after each migrate - see migrations.py.
 after_migrate = "field_sales.migrations.after_migrate"
 
+# Custom fields field_sales grafts onto doctypes it doesn't own (Sales
+# Order, Address, Issue, Customer), plus the Issue DocPerm grant for the
+# Sales Executive App role. Without this, `bench migrate` on a fresh site
+# never creates them - they'd only exist as ad-hoc database state on
+# whichever site they were first added to, exactly the trap this app fell
+# into: this list exists because that already happened once.
+fixtures = [
+	{
+		"dt": "Custom Field",
+		"filters": [
+			["dt", "in", ["Sales Order", "Secondary Sales Order", "Address", "Issue", "Customer", "Expense Claim"]],
+			["fieldname", "like", "fs_%"],
+		],
+	},
+	{
+		"dt": "Custom DocPerm",
+		"filters": [
+			["parent", "=", "Issue"],
+			["role", "=", "Sales Executive App"],
+		],
+	},
+	{
+		# Secondary Sales Order (fmcg_cp) ships with no permission for any
+		# field-rep role at all - only System Manager - so a rep's own
+		# Channel Partner order flow would 403 on every call without this,
+		# the same gap Issue had before the grant above.
+		"dt": "Custom DocPerm",
+		"filters": [
+			["parent", "=", "Secondary Sales Order"],
+			["role", "=", "Sales Executive App"],
+		],
+	},
+	{
+		# Expense Claim (hrms) ships permission for the standard "Employee"
+		# role (create/write, but no submit) - not for Sales Executive App,
+		# and a rep's own Employee record may not even carry "Employee"
+		# itself. Same gap, same fix as the two grants above.
+		"dt": "Custom DocPerm",
+		"filters": [
+			["parent", "=", "Expense Claim"],
+			["role", "=", "Sales Executive App"],
+		],
+	},
+	{
+		# The real Journey Plan approval chain (Pending -> ASM Approved ->
+		# Approved, with Reject/revise branches) - originally hand-built in
+		# Desk on production only, so a fresh site (including this bench's
+		# own local one) never had it. Tracked as a fixture from here on so
+		# `bench migrate` provisions it everywhere, the same reason every
+		# other fixture in this list exists.
+		"dt": "Workflow",
+		"filters": [["name", "=", "Journey Plan"]],
+	},
+]
+
 # Overriding Methods
 # ------------------------------
 #
@@ -282,8 +337,23 @@ after_migrate = "field_sales.migrations.after_migrate"
 # the server recalculates it on every save, whatever the origin.
 # This must run on before_validate: the controller computes amounts and totals
 # during validate, so correcting a rate afterwards would leave them stale.
+#
+# Employee.on_update also runs field_sales.migrations.ensure_role_profiles,
+# which counters mohan_impex's own on_update handler for the same event -
+# see migrations.py for why that's needed.
 doc_events = {
 	"Sales Order": {
-		"before_validate": "field_sales.pricing.enforce_sales_order_rates",
+		"before_validate": [
+			"field_sales.pricing.enforce_sales_order_rates",
+			"field_sales.api.catalog.ensure_contact_mobile",
+		],
+		"before_save": "field_sales.pricing.restore_native_pricing_rules_field",
+	},
+	"Employee": {
+		"on_update": "field_sales.migrations.ensure_role_profiles",
+	},
+	"Pricing Rule": {
+		"on_update": "field_sales.pricing.clear_pricing_rule_cache",
+		"on_trash": "field_sales.pricing.clear_pricing_rule_cache",
 	},
 }

@@ -50,18 +50,36 @@
         </div>
       </div>
 
-      <!-- filters -->
-      <div v-if="config.filters?.length" class="flex gap-2 px-4 pt-3 overflow-x-auto">
-        <select
-          v-for="f in config.filters"
-          :key="f.key"
-          v-model="filterValues[f.key]"
-          class="rounded-[10px] border border-rule bg-surface px-2 py-1.5 text-sm"
-          @change="reload"
-        >
-          <option value="">{{ f.label }}: any</option>
-          <option v-for="opt in f.options" :key="opt" :value="opt">{{ opt }}</option>
-        </select>
+      <!-- filters - toggle buttons, not a native <select>: the closed
+           control can be themed, but a native dropdown's expanded list is
+           rendered by the OS/browser itself and always shows the device's
+           own default colors (a jarring blue highlight, on most platforms)
+           no matter what the rest of the app looks like. Same button style
+           already used for tabs just above. -->
+      <div v-if="config.filters?.length" class="px-4 pt-3 space-y-2">
+        <div v-for="f in config.filters" :key="f.key">
+          <p class="text-xs font-display font-medium text-ink-3 mb-1">{{ f.label }}</p>
+          <div class="flex gap-2 overflow-x-auto">
+            <button
+              type="button"
+              class="px-3 py-1.5 rounded-full text-sm font-display whitespace-nowrap border"
+              :class="!filterValues[f.key] ? 'bg-accent text-accent-fg border-accent' : 'bg-surface text-ink-2 border-rule'"
+              @click="setFilter(f.key, '')"
+            >
+              All
+            </button>
+            <button
+              v-for="opt in f.options"
+              :key="opt"
+              type="button"
+              class="px-3 py-1.5 rounded-full text-sm font-display whitespace-nowrap border"
+              :class="filterValues[f.key] === opt ? 'bg-accent text-accent-fg border-accent' : 'bg-surface text-ink-2 border-rule'"
+              @click="setFilter(f.key, opt)"
+            >
+              {{ opt }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <LoadingSkeleton v-if="loading && !records.length" class="mt-2" />
@@ -86,14 +104,27 @@
           class="w-full text-left bg-surface rounded-2xl border border-rule p-4 active:opacity-80"
           @click="openRow(row)"
         >
-          <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0">
-              <p class="font-display font-semibold text-ink truncate">{{ config.cardTitle(row) }}</p>
-              <p v-if="config.cardSubtitle" class="text-sm text-ink-2 truncate">{{ config.cardSubtitle(row) }}</p>
+          <div class="flex items-start gap-3">
+            <img
+              v-if="config.cardImage && config.cardImage(row)"
+              :src="config.cardImage(row)"
+              alt=""
+              class="w-14 h-14 rounded-xl object-cover shrink-0 border border-rule"
+            />
+            <div class="min-w-0 flex-1">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="font-display font-semibold text-ink truncate">{{ config.cardTitle(row) }}</p>
+                  <p v-if="config.cardSubtitle" class="text-sm text-ink-2 truncate">{{ config.cardSubtitle(row) }}</p>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <StatusPill v-if="config.cardBadge && config.cardBadge(row)" v-bind="config.cardBadge(row)" />
+                  <StatusPill v-if="config.statusField" :status="row[config.statusField]" />
+                </div>
+              </div>
+              <p v-if="config.cardMeta" class="text-xs text-ink-3 mt-1">{{ config.cardMeta(row) }}</p>
             </div>
-            <StatusPill v-if="config.statusField" :status="row[config.statusField]" />
           </div>
-          <p v-if="config.cardMeta" class="text-xs text-ink-3 mt-1">{{ config.cardMeta(row) }}</p>
         </button>
 
         <div v-if="records.length < total" class="pt-2">
@@ -134,7 +165,7 @@ const props = defineProps({
   // {
   //   title, method, searchable, tabs:[{key,label}], defaultTab,
   //   filters:[{key,label,options}], mineToggle, mineLabel,
-  //   statusField, cardTitle(row), cardSubtitle(row), cardMeta(row),
+  //   statusField, cardBadge(row) -> {status, tone} | null, cardImage(row), cardTitle(row), cardSubtitle(row), cardMeta(row),
   //   createRouteName, detailRouteName, fallback
   // }
   config: { type: Object, required: true },
@@ -166,6 +197,11 @@ function setTab(key) {
 
 function setIsSelf(val) {
   isSelf.value = isSelf.value === val ? null : val
+  reload()
+}
+
+function setFilter(key, value) {
+  filterValues[key] = value
   reload()
 }
 

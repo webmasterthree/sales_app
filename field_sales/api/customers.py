@@ -26,6 +26,8 @@ CUSTOMER_CONFIG = ListConfig(
         "mobile_no",
         "email_id",
         "customer_primary_contact",
+        "customer_level",
+        "cp_name",
         "disabled",
     ],
     search_fields=["name", "customer_name", "mobile_no"],
@@ -33,6 +35,8 @@ CUSTOMER_CONFIG = ListConfig(
         "customer_group": "customer_group",
         "territory": "territory",
         "disabled": "disabled",
+        "customer_level": "customer_level",
+        "custom_channel_partner": "custom_channel_partner",
     },
     territory_field="territory",
     # Customer has no "raised by" employee, so the mine/team toggle is not
@@ -40,12 +44,46 @@ CUSTOMER_CONFIG = ListConfig(
     owner_field=None,
     default_order="customer_name asc",
     sortable_fields=["name", "customer_name", "customer_group", "territory"],
+    # The org's own Customer master already carries this distinction
+    # (customer_level - see Customer-custom_channel_partner's depends_on) -
+    # surfaced here as tabs, matching how the legacy my_customer list let a
+    # rep switch between their Primary (distributor) and Secondary (outlet)
+    # customers rather than showing one undifferentiated list.
+    tabs={
+        "primary": {"customer_level": "Primary"},
+        "secondary": {"customer_level": "Secondary"},
+    },
 )
 
 
 @frappe.whitelist()
 def customer_list():
     return paginated_list(CUSTOMER_CONFIG)
+
+
+# Customers flagged is_dl=1 (distributor-level) are the only ones the org's
+# own Customer master allows as a Secondary customer's channel partner - see
+# Customer-custom_channel_partner's link_filters (fmcg_cp's customer.json).
+# A Prospect visit has no Customer record yet to derive this from, so its
+# channel-partner picker still needs a real, correctly-scoped list to search
+# rather than the generic (and, for this purpose, wrong) customer_list.
+DISTRIBUTOR_CONFIG = ListConfig(
+    doctype="Customer",
+    fields=["name", "customer_name", "territory"],
+    search_fields=["name", "customer_name"],
+    filter_fields={"territory": "territory"},
+    territory_field="territory",
+    owner_field=None,
+    default_order="customer_name asc",
+    sortable_fields=["name", "customer_name"],
+    base_filters={"is_dl": 1, "disabled": 0},
+)
+
+
+@frappe.whitelist()
+def distributor_list():
+    """Distributor-level customers, for picking a channel partner."""
+    return paginated_list(DISTRIBUTOR_CONFIG)
 
 
 @frappe.whitelist()
@@ -62,7 +100,7 @@ def customer(name: str):
             ["Dynamic Link", "link_name", "=", name],
         ],
         fields=["name", "address_title", "address_type", "address_line1",
-                "address_line2", "city", "state", "pincode",
+                "address_line2", "district", "city", "state", "pincode",
                 "fs_latitude", "fs_longitude"],
     )
     data["contacts"] = frappe.get_all(
@@ -112,6 +150,45 @@ def customer_ledger(customer: str, from_date: str | None = None,
             if flt(i.outstanding_amount) > 0 and i.due_date and getdate(i.due_date) < getdate(nowdate())
         ),
     }
+
+
+@frappe.whitelist()
+def invoice_items(invoice: str):
+    """Line items on a submitted invoice, to prefill a complaint's claimed
+    items - a rep filing a complaint against a specific invoice should start
+    from what was actually billed on it, not re-pick items from the whole
+    catalogue a second time.
+
+    Gated on the invoice's own Customer, not Sales Invoice itself - same
+    convention customer_ledger already uses just above. A field rep's role
+    has no real document-level read permission on Sales Invoice (only
+    customer_ledger's own frappe.get_all can see it, since get_all bypasses
+    permission checks by design) - has_permission("Sales Invoice", ...)
+    would refuse every real rep outright.
+    """
+    customer = frappe.db.get_value("Sales Invoice", invoice, "customer")
+    if not customer or not frappe.has_permission("Customer", "read", doc=customer):
+        raise frappe.PermissionError
+    return frappe.get_all(
+        "Sales Invoice Item",
+        filters={"parent": invoice},
+        fields=["item_code", "item_name", "qty", "uom", "batch_no", "amount"],
+        order_by="idx asc",
+    )
+
+
+@frappe.whitelist()
+def customer_change_requests(customer: str):
+    """Past change requests raised for this customer, newest first - the
+    Change Log a rep sees before deciding whether to raise another one."""
+    if not frappe.has_permission("Customer", "read", doc=customer):
+        raise frappe.PermissionError
+    return frappe.get_all(
+        "Customer Change Request",
+        filters={"customer": customer},
+        fields=["name", "requested_change", "status", "resolution_notes", "creation"],
+        order_by="creation desc",
+    )
 
 
 @frappe.whitelist(methods=["POST"])

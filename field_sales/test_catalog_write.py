@@ -10,11 +10,13 @@ lifecycle, still end up with the server's own rate on disk even when a client
 sends a different one - the actual defect this app existed to close.
 """
 
+from unittest.mock import patch
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import add_days, flt, nowdate
 
-from field_sales.api.catalog import create_order, submit_order, update_order
+from field_sales.api.catalog import _resolve_gst, create_order, order_list, submit_order, update_order
 
 REP = "ravi.tsm@demo.local"
 PRICE_LIST = "Standard Selling"
@@ -132,6 +134,57 @@ class TestSalesOrderWrite(FrappeTestCase):
         self.assertTrue(result["name"])
         self.assertEqual(result["docstatus"], 0)
 
+    def test_create_derives_contact_mobile_from_the_contact_person(self):
+        """Real gap found while wiring up a WhatsApp order-confirmation
+        notification: contact_mobile has no fetch_from of its own on this
+        doctype, so it silently stayed blank on every order ever created
+        here regardless of which contact was picked - breaking anything
+        that reads it."""
+        contact_name = ensure("Contact", "FS Test Catalog Contact", {
+            "first_name": "FS Test Catalog Contact",
+            "phone_nos": [{"phone": "+919876500000", "is_primary_mobile_no": 1}],
+        })
+        if not frappe.db.exists(
+            "Dynamic Link", {"parent": contact_name, "link_doctype": "Customer", "link_name": self.customer}
+        ):
+            contact = frappe.get_doc("Contact", contact_name)
+            contact.append("links", {"link_doctype": "Customer", "link_name": self.customer})
+            contact.save(ignore_permissions=True)
+
+        result = create_order(**self._payload(contact_person=contact_name))
+        doc = frappe.get_doc("Sales Order", result["name"])
+        self.assertEqual(doc.contact_mobile, "+919876500000")
+
+    def test_ensure_contact_mobile_falls_back_to_customer_when_created_in_desk(self):
+        """Real production bug: a Sales Order created directly in Desk never
+        goes through create_order/_resolve_order_context at all, so it could
+        reach submission with no contact_mobile whatsoever even though the
+        Customer's own record has one - silently breaking anything that
+        reads it (a WhatsApp order confirmation included). This is the
+        universal doc_event fallback that covers that path too."""
+        frappe.set_user("Administrator")
+        frappe.db.set_value("Customer", self.customer, "mobile_no", "+919876511111")
+        doc = frappe.new_doc("Sales Order")
+        doc.customer = self.customer
+        doc.company = frappe.defaults.get_global_default("company")
+        doc.delivery_date = add_days(nowdate(), 7)
+        doc.append("items", {"item_code": self.item, "qty": 1, "rate": LIST_RATE})
+        doc.flags.ignore_mandatory = True
+        doc.insert(ignore_permissions=True)
+        self.assertEqual(doc.contact_mobile, "+919876511111")
+
+    def test_ensure_contact_mobile_does_not_override_an_explicit_value(self):
+        frappe.set_user("Administrator")
+        doc = frappe.new_doc("Sales Order")
+        doc.customer = self.customer
+        doc.company = frappe.defaults.get_global_default("company")
+        doc.delivery_date = add_days(nowdate(), 7)
+        doc.contact_mobile = "+919876522222"
+        doc.append("items", {"item_code": self.item, "qty": 1, "rate": LIST_RATE})
+        doc.flags.ignore_mandatory = True
+        doc.insert(ignore_permissions=True)
+        self.assertEqual(doc.contact_mobile, "+919876522222")
+
     def test_a_client_supplied_rate_is_not_stored(self):
         """The headline defect: a client could name its own order price."""
         result = create_order(**self._payload(rate=1))
@@ -180,6 +233,40 @@ class TestSalesOrderWrite(FrappeTestCase):
                 {"item_code": self.item, "qty": 1, "uom": "Kg"}
             ])
 
+    # ------------------------------------------------------------ channel partner
+
+    def test_customer_type_is_derived_from_the_customer_not_the_client(self):
+        """Same derivation as field_visit.py/field_trial_plan.py - a client
+        claiming Secondary for a Primary customer is simply overridden."""
+        result = create_order(**self._payload(customer_level="Secondary", custom_channel_partner="bogus"))
+        doc = frappe.get_doc("Sales Order", result["name"])
+        if not doc.meta.has_field("customer_level"):
+            self.skipTest("customer_level not installed on this site's Sales Order")
+        self.assertEqual(doc.customer_level, "Primary")
+        self.assertFalse(doc.custom_channel_partner)
+
+    def test_a_secondary_customers_channel_partner_is_copied_onto_the_order(self):
+        partner = frappe.db.get_value("Customer", {"name": ["!=", self.customer]}, "name")
+        if not partner:
+            self.skipTest("need a second Customer on this site")
+        doc = frappe.get_doc("Customer", self.customer)
+        if not doc.meta.has_field("customer_level"):
+            self.skipTest("customer_level not installed on this site's Customer")
+        frappe.db.set_value(
+            "Customer", self.customer,
+            {"customer_level": "Secondary", "custom_channel_partner": partner},
+        )
+        try:
+            result = create_order(**self._payload())
+            order = frappe.get_doc("Sales Order", result["name"])
+            self.assertEqual(order.customer_level, "Secondary")
+            self.assertEqual(order.custom_channel_partner, partner)
+        finally:
+            frappe.db.set_value(
+                "Customer", self.customer,
+                {"customer_level": "Primary", "custom_channel_partner": None},
+            )
+
     # ------------------------------------------------------------ update / submit
 
     def test_update_edits_a_draft(self):
@@ -206,3 +293,119 @@ class TestSalesOrderWrite(FrappeTestCase):
         name = create_order(**self._payload())["name"]
         result = submit_order(name)
         self.assertEqual(result["docstatus"], 1)
+
+    # ------------------------------------------------------------ gst
+    #
+    # Confirmed on production: india_compliance's get_gst_details silently
+    # refuses to resolve any tax template at all - not even a blank one -
+    # unless doc.company_gstin is already set. The Desk form's own JS fills
+    # that field in the moment a company/warehouse is picked; a document
+    # built by this endpoint never goes through that trigger, so the field
+    # stayed blank and get_gst_details returned nothing but place_of_supply.
+    # Every item then got stamped Nil-Rated by india_compliance's own
+    # fallback for "no GST taxes on this doc", zeroing the whole order's tax
+    # regardless of what each item's own Item Tax Template says. This site's
+    # demo Company has no GSTIN, so get_gst_details itself is a real no-op
+    # here (already covered by every other test in this file passing) -
+    # these tests mock it to prove _resolve_gst's own wiring is correct
+    # independent of that master data.
+
+    def test_resolve_gst_fills_company_gstin_before_resolving(self):
+        doc = frappe.new_doc("Sales Order")
+        doc.company = frappe.defaults.get_global_default("company")
+        captured = {}
+
+        def fake_get_gst_details(party_details, doctype, company, update_place_of_supply=False):
+            captured["company_gstin"] = party_details.get("company_gstin")
+            return {}
+
+        with (
+            patch(
+                "india_compliance.gst_india.overrides.transaction.get_gst_details",
+                side_effect=fake_get_gst_details,
+            ),
+            patch("frappe.get_cached_value", return_value="19AATCM1676J1ZP"),
+        ):
+            _resolve_gst(doc)
+
+        self.assertEqual(doc.company_gstin, "19AATCM1676J1ZP")
+        self.assertEqual(captured["company_gstin"], "19AATCM1676J1ZP")
+
+    def test_resolve_gst_applies_a_resolved_template_and_its_tax_rows(self):
+        doc = frappe.new_doc("Sales Order")
+        doc.company = frappe.defaults.get_global_default("company")
+        fake_gst = {
+            "place_of_supply": "09-Uttar Pradesh",
+            "taxes_and_charges": "Fake Out-state GST Template",
+            "taxes": [{
+                "charge_type": "On Net Total", "account_head": "Fake IGST Account",
+                "description": "IGST", "rate": 18,
+            }],
+        }
+        with patch(
+            "india_compliance.gst_india.overrides.transaction.get_gst_details",
+            return_value=fake_gst,
+        ):
+            _resolve_gst(doc)
+        self.assertEqual(doc.taxes_and_charges, "Fake Out-state GST Template")
+        self.assertEqual(len(doc.taxes), 1)
+        self.assertEqual(doc.taxes[0].rate, 18)
+
+    def test_resolve_gst_leaves_the_order_alone_when_nothing_resolves(self):
+        """No GSTIN on this demo Company (or a non-Indian customer) is a
+        legitimate case - _resolve_gst must not invent a template."""
+        doc = frappe.new_doc("Sales Order")
+        doc.company = frappe.defaults.get_global_default("company")
+        with patch(
+            "india_compliance.gst_india.overrides.transaction.get_gst_details",
+            return_value={},
+        ):
+            _resolve_gst(doc)
+        self.assertFalse(doc.get("taxes_and_charges"))
+        self.assertEqual(len(doc.get("taxes") or []), 0)
+
+    # ------------------------------------------------------- mine / team's
+    #
+    # ORDER_CONFIG.owner_field used to be None, so the app's usual "My X /
+    # My team's" toggle (Field Visit, Journey Plan, ...) had no way to work
+    # for Sales Order - is_self was silently ignored. created_by_emp already
+    # exists and is already reliably stamped by create_order (see
+    # test_create_forces_the_signed_in_users_own_employee above); this just
+    # wires the list config to use it.
+
+    def test_order_list_is_self_filters_to_the_callers_own_orders(self):
+        mine = create_order(**self._payload())
+        other_employee = frappe.db.get_value(
+            "Employee", {"user_id": "priya.tsm@demo.local", "status": "Active"}, "name"
+        )
+        theirs = create_order(**self._payload())
+        if other_employee:
+            frappe.db.set_value("Sales Order", theirs["name"], "created_by_emp", other_employee)
+
+        frappe.form_dict.is_self = 1
+        try:
+            result = order_list()
+        finally:
+            frappe.form_dict.pop("is_self", None)
+        names = {r["name"] for r in result["records"]}
+        self.assertIn(mine["name"], names)
+        self.assertNotIn(theirs["name"], names)
+
+    def test_order_list_is_self_zero_excludes_the_callers_own_orders(self):
+        mine = create_order(**self._payload())
+        other_employee = frappe.db.get_value(
+            "Employee", {"user_id": "priya.tsm@demo.local", "status": "Active"}, "name"
+        )
+        theirs = create_order(**self._payload())
+        if other_employee:
+            frappe.db.set_value("Sales Order", theirs["name"], "created_by_emp", other_employee)
+
+        frappe.form_dict.is_self = 0
+        try:
+            result = order_list()
+        finally:
+            frappe.form_dict.pop("is_self", None)
+        names = {r["name"] for r in result["records"]}
+        self.assertNotIn(mine["name"], names)
+        if other_employee:
+            self.assertIn(theirs["name"], names)

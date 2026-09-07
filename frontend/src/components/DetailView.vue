@@ -2,6 +2,7 @@
   <div class="min-h-screen bg-ground pb-28">
     <AppBar :title="loading ? 'Loading…' : config.title(doc) " :fallback="config.fallback">
       <template #actions>
+        <slot name="appbar-extra" :doc="doc" />
         <StatusPill v-if="doc && config.statusField" :status="doc[config.statusField]" />
       </template>
     </AppBar>
@@ -20,12 +21,22 @@
           {{ section.title }}
         </summary>
         <div class="px-4 pb-4 space-y-2">
-          <div v-for="f in section.fields" :key="f.key" class="py-1 border-b border-rule-soft last:border-0">
+          <div
+            v-for="f in section.fields"
+            v-show="!(f.hidden && f.hidden(doc))"
+            :key="f.key"
+            class="py-1 border-b border-rule-soft last:border-0"
+          >
             <template v-if="f.html">
               <span class="text-ink-2 text-sm block mb-1">{{ f.label }}</span>
               <div v-if="doc[f.key]" class="text-ink text-sm prose-html" v-html="doc[f.key]" />
               <span v-else class="text-ink text-sm">—</span>
             </template>
+            <div v-else-if="f.pill" class="flex justify-between items-center gap-3 text-sm">
+              <span class="text-ink-2">{{ f.label }}</span>
+              <StatusPill v-if="doc[f.key]" :status="doc[f.key]" />
+              <span v-else class="text-ink text-right">—</span>
+            </div>
             <div v-else class="flex justify-between gap-3 text-sm">
               <span class="text-ink-2">{{ f.label }}</span>
               <span class="text-ink text-right">{{ format(f) }}</span>
@@ -50,7 +61,7 @@
         :disabled="busy"
         @click="runAction(a)"
       >
-        {{ busy === a.label ? "Working…" : a.label }}
+        {{ a.label }}
       </button>
     </div>
   </div>

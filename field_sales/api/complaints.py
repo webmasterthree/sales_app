@@ -54,6 +54,24 @@ COMPLAINT_CONFIG = ListConfig(
 WRITABLE = {"subject", "description", "customer", "priority",
             "fs_claim_type", "fs_field_visit", "fs_sales_invoice", "fs_photo"}
 
+WRITABLE_TABLES = {
+    "fs_complaint_reasons": {"reason", "remarks"},
+    "fs_complaint_items": {"item_code", "qty", "value_of_goods", "batch_no", "mfd", "expiry_date"},
+}
+
+
+def _apply_tables(doc, payload: dict) -> None:
+    """Copy only the declared child-table fields onto the document."""
+    for table, allowed in WRITABLE_TABLES.items():
+        if table not in (payload or {}):
+            continue
+        rows = payload.get(table) or []
+        if isinstance(rows, str):
+            rows = frappe.parse_json(rows)
+        doc.set(table, [])
+        for row in rows:
+            doc.append(table, {k: v for k, v in (row or {}).items() if k in allowed})
+
 
 @frappe.whitelist()
 def complaint_list():
@@ -83,6 +101,7 @@ def raise_complaint(**payload):
     for key, value in payload.items():
         if key in WRITABLE:
             doc.set(key, value)
+    _apply_tables(doc, payload)
 
     employee = frappe.db.get_value(
         "Employee", {"user_id": frappe.session.user, "status": "Active"}, "name"

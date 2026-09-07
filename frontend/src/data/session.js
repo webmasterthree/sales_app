@@ -35,6 +35,18 @@ export const session = reactive({
     handleLogin(response)
     return response
   },
+  requestOtp: (email) => call("field_sales.api.auth.request_login_otp", { email }),
+  loginWithOtp: async (email, otp) => {
+    const response = await call("field_sales.api.auth.verify_login_otp", { email, otp })
+    if (response && response.user) {
+      session.user = sessionUser()
+      userResource.reload()
+      router.replace({ path: "/" })
+    }
+    return response
+  },
+  forgotPassword: (email) =>
+    call("frappe.core.doctype.user.user.reset_password", { user: email }),
   logout: createResource({
     url: "logout",
     onSuccess() {

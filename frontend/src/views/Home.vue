@@ -53,7 +53,7 @@
           :disabled="punching"
           @click="punch"
         >
-          {{ punching ? "Working…" : (checkedIn ? "Check-out" : "Check-in") }}
+          {{ checkedIn ? "Check-out" : "Check-in" }}
         </button>
       </div>
 
@@ -160,6 +160,8 @@
       </div>
     </div>
   </div>
+
+  <LocationConfirmModal :model-value="locationConfirm" @confirm="onLocationConfirm" @cancel="onLocationCancel" />
 </template>
 
 <script setup>
@@ -171,9 +173,11 @@ import EmptyState from "@/components/EmptyState.vue"
 import ErrorState from "@/components/ErrorState.vue"
 import LoadingSkeleton from "@/components/LoadingSkeleton.vue"
 import Icon from "@/components/Icon.vue"
+import LocationConfirmModal from "@/components/LocationConfirmModal.vue"
 import { iconFor } from "@/data/modules"
 import { queueWrite } from "@/composables/offlineQueue"
 import { unreadCount } from "@/data/notifications"
+import { buildLocationConfirm } from "@/utils/locationConfirm"
 
 const unread = unreadCount
 const data = ref(null)
@@ -197,6 +201,7 @@ const loading = ref(true)
 const error = ref("")
 const punching = ref(false)
 const geoDenied = ref(false)
+const locationConfirm = ref(null)
 
 const checkedIn = computed(() => !!data.value?.attendance?.checked_in)
 
@@ -265,18 +270,26 @@ function formatAmount(v) {
   return Math.round(v || 0).toLocaleString("en-IN")
 }
 
-function getPosition() {
+// A recent cached fix (up to a minute old) resolves almost instantly in the
+// common case; a slower dedicated GPS request only runs as a fallback.
+function requestPosition(options) {
   return new Promise((resolve) => {
-    if (!navigator.geolocation) return resolve(null)
     navigator.geolocation.getCurrentPosition(
       (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
       (err) => {
         if (err.code === err.PERMISSION_DENIED) geoDenied.value = true
         resolve(null)
       },
-      { timeout: 8000, maximumAge: 30000 }
+      options
     )
   })
+}
+
+async function getPosition() {
+  if (!navigator.geolocation) return null
+  const quick = await requestPosition({ enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 })
+  if (quick) return quick
+  return requestPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
 }
 
 function requestLocationAgain() {
@@ -284,11 +297,42 @@ function requestLocationAgain() {
   getPosition()
 }
 
+// The map popup is the final confirmation step, not a receipt: the actual
+// punch only fires once the rep taps Confirm.
+let confirmResolve = null
+
+function askLocationConfirm(label, confirmLabel, pos) {
+  locationConfirm.value = { ...buildLocationConfirm(label, pos), confirmLabel }
+  return new Promise((resolve) => {
+    confirmResolve = resolve
+  })
+}
+
+function onLocationConfirm() {
+  locationConfirm.value = null
+  confirmResolve?.(true)
+  confirmResolve = null
+}
+
+function onLocationCancel() {
+  locationConfirm.value = null
+  confirmResolve?.(false)
+  confirmResolve = null
+}
+
 async function punch() {
   punching.value = true
   try {
     const pos = await getPosition()
     const logType = checkedIn.value ? "OUT" : "IN"
+    if (pos) {
+      const proceed = await askLocationConfirm(
+        logType === "IN" ? "Check in here?" : "Check out here?",
+        logType === "IN" ? "Confirm Check-in" : "Confirm Check-out",
+        pos
+      )
+      if (!proceed) return
+    }
     const result = await queueWrite({
       method: "field_sales.api.home.punch",
       args: { log_type: logType, latitude: pos?.latitude, longitude: pos?.longitude },
