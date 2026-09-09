@@ -22,7 +22,7 @@
           <Icon name="filter" :size="18" />
           <span
             v-if="activeFilterChips.length"
-            class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-ink text-white text-[11px] font-bold flex items-center justify-center"
+            class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-accent-fg text-[11px] font-bold flex items-center justify-center"
           >{{ activeFilterChips.length }}</span>
         </button>
       </div>
@@ -57,11 +57,11 @@
         description="Nothing matches this search and your applied filters."
       />
       <div v-else class="rounded-[14px] border border-rule overflow-hidden bg-surface">
-        <div class="grid grid-cols-[64px_1fr_70px_48px] gap-2 items-center bg-ink px-3 h-[42px]">
-          <button type="button" class="text-left text-[11px] font-display font-extrabold text-white uppercase tracking-wide" @click="sortBy('item_code')">SKU{{ caret("item_code") }}</button>
-          <button type="button" class="text-left text-[11px] font-display font-extrabold text-white uppercase tracking-wide" @click="sortBy('item_name')">Product{{ caret("item_name") }}</button>
-          <button type="button" class="text-right text-[11px] font-display font-extrabold text-white uppercase tracking-wide" @click="sortBy('rate')">Price{{ caret("rate") }}</button>
-          <span class="text-[11px] font-display font-extrabold text-white uppercase tracking-wide text-center">Type</span>
+        <div class="grid grid-cols-[64px_1fr_70px_48px] gap-2 items-center bg-accent px-3 h-[42px]">
+          <button type="button" class="text-left text-[11px] font-display font-extrabold text-accent-fg uppercase tracking-wide" @click="sortBy('item_code')">SKU{{ caret("item_code") }}</button>
+          <button type="button" class="text-left text-[11px] font-display font-extrabold text-accent-fg uppercase tracking-wide" @click="sortBy('item_name')">Product{{ caret("item_name") }}</button>
+          <button type="button" class="text-right text-[11px] font-display font-extrabold text-accent-fg uppercase tracking-wide" @click="sortBy('rate')">Price{{ caret("rate") }}</button>
+          <span class="text-[11px] font-display font-extrabold text-accent-fg uppercase tracking-wide text-center">Type</span>
         </div>
         <div
           v-for="(row, i) in sortedRecords"
@@ -89,6 +89,7 @@
     @click.self="filterSheetOpen = false"
   >
     <div class="bg-surface w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl overflow-hidden pb-safe">
+      <div class="h-[3px]" style="background: linear-gradient(90deg, var(--fs-accent), var(--fs-chart))" aria-hidden="true" />
       <div class="flex justify-center pt-2 sm:hidden"><div class="w-10 h-1 rounded-full bg-rule"></div></div>
       <div class="px-5 pt-3 pb-4 max-h-[80vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-4">
@@ -116,27 +117,21 @@
           >{{ opt.label }}</button>
         </div>
 
+        <!-- a real catalogue can have dozens of item groups - chips that
+             wrap into a long scroll aren't practical at that count, unlike
+             the app's other short, fixed-option filters. A select's closed
+             control is still themed; only its OS-rendered open list isn't,
+             which is the right trade-off here given how many options this
+             one field actually has. -->
         <label class="block text-xs font-display font-bold text-ink-2 mb-1.5">Product category</label>
-        <div class="flex flex-wrap gap-2 mb-6">
-          <button
-            type="button"
-            class="min-h-[44px] px-4 rounded-[13px] border-[1.5px] font-display font-bold text-sm"
-            :class="!draftFilters.item_group ? 'border-accent bg-accent-soft text-accent-ink' : 'border-rule text-ink-2'"
-            @click="draftFilters.item_group = ''"
-          >All</button>
-          <button
-            v-for="g in itemGroups"
-            :key="g.name"
-            type="button"
-            class="min-h-[44px] px-4 rounded-[13px] border-[1.5px] font-display font-bold text-sm"
-            :class="draftFilters.item_group === g.name ? 'border-accent bg-accent-soft text-accent-ink' : 'border-rule text-ink-2'"
-            @click="draftFilters.item_group = g.name"
-          >{{ g.name }}</button>
-        </div>
+        <select v-model="draftFilters.item_group" class="w-full h-[48px] rounded-[13px] border border-rule bg-surface px-3.5 text-sm font-medium mb-6">
+          <option value="">All categories</option>
+          <option v-for="g in itemGroups" :key="g.name" :value="g.name">{{ g.name }}</option>
+        </select>
 
         <div class="flex gap-2.5">
           <button type="button" class="flex-none h-[50px] px-5 rounded-[14px] border border-rule text-ink font-display font-bold" @click="resetDraftFilters">Reset</button>
-          <button type="button" class="flex-1 h-[50px] rounded-[14px] bg-ink text-white font-display font-bold" @click="applyFilters">Show results</button>
+          <button type="button" class="flex-1 h-[50px] rounded-[14px] bg-accent text-accent-fg font-display font-bold" @click="applyFilters">Show results</button>
         </div>
       </div>
     </div>

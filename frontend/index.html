@@ -3,13 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
-    <title>Field Sales</title>
+    <title>{{ app_name }}</title>
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="Field Sales" />
-    <meta name="theme-color" content="#8EC641" />
+    <meta name="apple-mobile-web-app-title" content="{{ app_name }}" />
+    <meta name="theme-color" content="#0F0B17" />
+    <!-- Both endpoints below live in api/branding.py and read from the
+         Field Sales Branding Single doctype on every request - the URLs
+         themselves never change, only what they return, so no Jinja is
+         needed here (unlike <title> above, which needs the real text at
+         first paint and so is rendered server-side instead). -->
+    <link rel="manifest" href="/api/method/field_sales.api.branding.manifest" />
+    <link rel="icon" href="/api/method/field_sales.api.branding.icon" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Manrope:wght@400;500;700;800&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Manrope:wght@400;500;700;800&family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" />
   </head>
   <body class="antialiased">
     <div id="app"></div>

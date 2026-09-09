@@ -101,9 +101,9 @@ class TestHome(FrappeTestCase):
 
     # ------------------------------------------------------------ scoreboard
 
-    def test_scoreboard_has_the_three_counters(self):
+    def test_scoreboard_has_the_two_counters(self):
         board = home.scoreboard(REP)
-        self.assertEqual([b["name"] for b in board], ["visits", "orders", "demos"])
+        self.assertEqual([b["name"] for b in board], ["visits", "orders"])
         for entry in board:
             self.assertIsInstance(entry["count"], int)
 

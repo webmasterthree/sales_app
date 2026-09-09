@@ -20,6 +20,7 @@ REP = "ravi.tsm@demo.local"
 REP_TERRITORY = "Kolkata Area"
 ASM = "asm.wftest@demo.local"
 NSM = "nsm.wftest@demo.local"
+MANAGER = "jp.manager.wftest@demo.local"
 
 
 def _grant_role_directly(user_email, role):
@@ -87,6 +88,7 @@ class TestJourneyPlan(FrappeTestCase):
         frappe.db.rollback()
 
     def _cleanup(self):
+        frappe.db.sql("delete from `tabNotification Log` where document_type = %s", ("Journey Plan",))
         for name in frappe.get_all("Journey Plan", pluck="name"):
             doc = frappe.get_doc("Journey Plan", name)
             if doc.docstatus == 1:
@@ -218,6 +220,21 @@ class TestJourneyPlan(FrappeTestCase):
         doc = frappe.get_doc("Journey Plan", name)
         self.assertEqual(doc.workflow_state, "Approved")
 
+    # ------------------------------------------------------------ notifications
+
+    def test_create_notifies_the_reps_manager(self):
+        _grant_role_directly(MANAGER, "Sales Manager")
+        manager_emp = frappe.db.get_value("Employee", {"user_id": MANAGER}, "name")
+        original = frappe.db.get_value("Employee", self.employee, "reports_to")
+        frappe.db.set_value("Employee", self.employee, "reports_to", manager_emp)
+        try:
+            name = create_journey_plan(**self._payload())["name"]
+            self.assertTrue(frappe.db.exists("Notification Log", {
+                "for_user": MANAGER, "document_type": "Journey Plan", "document_name": name,
+            }))
+        finally:
+            frappe.db.set_value("Employee", self.employee, "reports_to", original)
+
 
 class TestJourneyPlanApproval(FrappeTestCase):
     """The real ASM -> NSM approval workflow (Pending -> ASM Approved ->
@@ -248,6 +265,7 @@ class TestJourneyPlanApproval(FrappeTestCase):
         frappe.db.rollback()
 
     def _cleanup(self):
+        frappe.db.sql("delete from `tabNotification Log` where document_type = %s", ("Journey Plan",))
         for name in frappe.get_all("Journey Plan", pluck="name"):
             doc = frappe.get_doc("Journey Plan", name)
             if doc.docstatus == 1:
@@ -303,6 +321,32 @@ class TestJourneyPlanApproval(FrappeTestCase):
         result = apply_journey_plan_action(doc.name, "Reject")
         self.assertEqual(result["workflow_state"], "Rejected")
         self.assertEqual(result["docstatus"], 0)
+
+    # ------------------------------------------------------------ notifications
+
+    def test_asm_approve_notifies_the_rep(self):
+        doc = self._plan()
+        frappe.set_user(ASM)
+        apply_journey_plan_action(doc.name, "Approve")
+        self.assertTrue(frappe.db.exists("Notification Log", {
+            "for_user": REP, "document_type": "Journey Plan", "document_name": doc.name,
+        }))
+
+    def test_nsm_approve_notifies_the_rep(self):
+        doc = self._plan()
+        frappe.set_user(NSM)
+        apply_journey_plan_action(doc.name, "Approve")
+        self.assertTrue(frappe.db.exists("Notification Log", {
+            "for_user": REP, "document_type": "Journey Plan", "document_name": doc.name,
+        }))
+
+    def test_asm_reject_notifies_the_rep(self):
+        doc = self._plan()
+        frappe.set_user(ASM)
+        apply_journey_plan_action(doc.name, "Reject")
+        self.assertTrue(frappe.db.exists("Notification Log", {
+            "for_user": REP, "document_type": "Journey Plan", "document_name": doc.name,
+        }))
 
     def test_rep_can_revise_a_rejected_plan_back_to_pending(self):
         doc = self._plan()

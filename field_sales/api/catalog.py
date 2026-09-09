@@ -850,6 +850,10 @@ def submit_order(name: str):
     """Submit a reviewed order."""
     doc = frappe.get_doc("Sales Order", name)
     doc.check_permission("submit")
+    # _as_a_privileged_user briefly elevates to Administrator below, so the
+    # real acting user - needed by notify.py's on_submit hook to tell the
+    # rep from their manager - has to be captured before that happens.
+    doc.flags.notify_actor = frappe.session.user
     with _as_a_privileged_user():
         doc.flags.ignore_permissions = True
         doc.submit()

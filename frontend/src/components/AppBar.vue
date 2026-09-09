@@ -1,5 +1,6 @@
 <template>
   <header class="sticky top-0 z-30 bg-surface border-b border-rule pt-safe">
+    <div class="h-[2px]" style="background: linear-gradient(90deg, transparent, var(--fs-accent), var(--fs-chart), transparent)" aria-hidden="true" />
     <div class="flex items-center gap-2 px-2 py-2 max-w-2xl mx-auto">
       <button
         v-if="back"

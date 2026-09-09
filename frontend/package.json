@@ -12,12 +12,15 @@
   "dependencies": {
     "dayjs": "^1.11.11",
     "feather-icons": "^4.29.1",
+    "firebase": "^10.8.0",
     "frappe-ui": "0.1.105",
     "idb-keyval": "^6.2.1",
     "leaflet": "^1.9.4",
     "vite-plugin-pwa": "^0.20.5",
     "vue": "^3.5.12",
-    "vue-router": "^4.3.2"
+    "vue-router": "^4.3.2",
+    "workbox-core": "^7.0.0",
+    "workbox-precaching": "^7.0.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.4.0",

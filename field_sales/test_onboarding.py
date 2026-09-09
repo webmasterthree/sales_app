@@ -60,6 +60,7 @@ class TestCustomerOnboarding(FrappeTestCase):
         frappe.db.rollback()
 
     def _cleanup(self):
+        frappe.db.sql("delete from `tabNotification Log` where document_type = %s", ("Customer Onboarding",))
         for name in frappe.get_all("Customer Onboarding", pluck="name"):
             doc = frappe.get_doc("Customer Onboarding", name)
             if doc.docstatus == 1:
@@ -144,6 +145,56 @@ class TestCustomerOnboarding(FrappeTestCase):
         doc.insert(ignore_permissions=True)
         self.assertNotEqual(doc.territory, "All Territories")
         self.assertEqual(doc.territory, TERRITORY)
+
+    # ------------------------------------------------------------ notifications
+
+    def _with_manager(self, fn):
+        """Temporarily makes MANAGER the rep's reports_to Employee, so
+        notify.notify_employee_event (see customer_onboarding.py's on_submit/
+        approve_onboarding/reject_onboarding) has somewhere to route to."""
+        manager_emp = frappe.db.get_value("Employee", {"user_id": MANAGER}, "name")
+        original = frappe.db.get_value("Employee", self.employee, "reports_to")
+        frappe.db.set_value("Employee", self.employee, "reports_to", manager_emp)
+        try:
+            fn()
+        finally:
+            frappe.db.set_value("Employee", self.employee, "reports_to", original)
+
+    def _notification_exists(self, for_user, name):
+        return bool(frappe.db.exists("Notification Log", {
+            "for_user": for_user, "document_type": "Customer Onboarding", "document_name": name,
+        }))
+
+    def test_submit_notifies_the_reps_manager(self):
+        def run():
+            name = self._submitted()
+            self.assertTrue(self._notification_exists(MANAGER, name))
+
+        self._with_manager(run)
+
+    def test_approve_notifies_the_rep(self):
+        def run():
+            name = self._submitted()
+            frappe.set_user(MANAGER)
+            try:
+                approve_onboarding(name)
+            finally:
+                frappe.set_user("Administrator")
+            self.assertTrue(self._notification_exists(REP, name))
+
+        self._with_manager(run)
+
+    def test_reject_notifies_the_rep(self):
+        def run():
+            name = self._submitted()
+            frappe.set_user(MANAGER)
+            try:
+                reject_onboarding(name, "Missing documents")
+            finally:
+                frappe.set_user("Administrator")
+            self.assertTrue(self._notification_exists(REP, name))
+
+        self._with_manager(run)
 
     def test_a_group_customer_group_is_not_carried_onto_the_customer(self):
         name = self._submitted(customer_group="All Customer Groups")

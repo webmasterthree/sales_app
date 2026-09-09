@@ -426,6 +426,27 @@ class TestFieldVisitWrite(FrappeTestCase):
         with self.assertRaises(frappe.ValidationError):
             check_out(name)
 
+    def test_submit_notifies_the_reps_manager(self):
+        # Field Visit's own on_submit calls field_sales.notify.notify_employee_event
+        # (see notify.py) - this pins that the hook actually fires on a real
+        # submit, not just in notify.py's own unit tests.
+        rep_employee = frappe.db.get_value("Employee", {"user_id": REP}, "name")
+        original_manager = frappe.db.get_value("Employee", rep_employee, "reports_to")
+        manager_user = frappe.db.get_value("Employee", {"status": "Active", "user_id": ["!=", REP]}, "user_id")
+        self.assertTrue(manager_user, "need a second active Employee with a user_id to act as manager")
+        frappe.db.set_value("Employee", rep_employee, "reports_to",
+                             frappe.db.get_value("Employee", {"user_id": manager_user}, "name"))
+        try:
+            name = self._complete_visit()
+            submit_visit(name)
+            self.assertTrue(
+                frappe.db.exists("Notification Log", {
+                    "for_user": manager_user, "document_type": "Field Visit", "document_name": name,
+                })
+            )
+        finally:
+            frappe.db.set_value("Employee", rep_employee, "reports_to", original_manager)
+
     # ------------------------------------------------------------ helper
 
     def _complete_visit(self) -> str:

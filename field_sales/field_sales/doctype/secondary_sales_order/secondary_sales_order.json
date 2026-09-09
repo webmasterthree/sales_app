@@ -1,0 +1,271 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "naming_series:",
+ "creation": "2025-12-06 17:23:35.122096",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_da1d",
+  "naming_series",
+  "custom_channel_partner",
+  "cp_name",
+  "customer",
+  "customer_name",
+  "customer_level",
+  "customer_visit",
+  "set_warehouse",
+  "custom_delivery_term",
+  "payment_terms_template",
+  "column_break_cdaf",
+  "transaction_date",
+  "delivery_date",
+  "shop",
+  "shop_name",
+  "custom_deal_type",
+  "cust_edit_needed",
+  "section_break_acyc",
+  "items",
+  "section_break_bxlg",
+  "remarks",
+  "section_break_wzbz",
+  "created_by_emp",
+  "created_by_name",
+  "territory",
+  "section_break_aecl",
+  "amended_from",
+  "address__contact_tab",
+  "customer_address",
+  "address_display",
+  "shipping_address_name",
+  "shipping_address",
+  "contact_number"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_da1d",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "customer.customer_name",
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name"
+  },
+  {
+   "default": "Today",
+   "fieldname": "transaction_date",
+   "fieldtype": "Date",
+   "label": "Date",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "customer.custom_shop",
+   "fieldname": "shop",
+   "fieldtype": "Link",
+   "label": "Shop",
+   "options": "Shop"
+  },
+  {
+   "fetch_from": "shop.shop_name",
+   "fieldname": "shop_name",
+   "fieldtype": "Data",
+   "label": "Shop Name"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Secondary Sales Order",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "section_break_acyc",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Secondary Sales Order Item"
+  },
+  {
+   "fieldname": "section_break_aecl",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_cdaf",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "SE-S0-.#####"
+  },
+  {
+   "fieldname": "customer_level",
+   "fieldtype": "Select",
+   "label": "Customer Level",
+   "options": "Primary\nSecondary"
+  },
+  {
+   "fieldname": "custom_deal_type",
+   "fieldtype": "Select",
+   "label": "Deal Type",
+   "options": "\n1\n2\n3\n4\n5"
+  },
+  {
+   "default": "0",
+   "fieldname": "cust_edit_needed",
+   "fieldtype": "Check",
+   "label": "Customer Edit Needed"
+  },
+  {
+   "fieldname": "delivery_date",
+   "fieldtype": "Date",
+   "label": "Delivery Date"
+  },
+  {
+   "fieldname": "section_break_bxlg",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "customer_visit",
+   "fieldtype": "Link",
+   "label": "Customer Visit",
+   "options": "Customer Visit Management"
+  },
+  {
+   "fieldname": "address__contact_tab",
+   "fieldtype": "Tab Break",
+   "label": "Address  Contact"
+  },
+  {
+   "fieldname": "shipping_address_name",
+   "fieldtype": "Link",
+   "label": "Shipping Address Name",
+   "options": "Address"
+  },
+  {
+   "fieldname": "payment_terms_template",
+   "fieldtype": "Link",
+   "label": "Payment Terms Template",
+   "options": "Payment Terms Template"
+  },
+  {
+   "fieldname": "custom_delivery_term",
+   "fieldtype": "Link",
+   "label": "Delivery Term",
+   "options": "Delivery Term"
+  },
+  {
+   "fieldname": "set_warehouse",
+   "fieldtype": "Link",
+   "label": "warehouse",
+   "options": "CP Warehouse"
+  },
+  {
+   "fieldname": "customer_address",
+   "fieldtype": "Link",
+   "label": "Customer Address",
+   "options": "Address"
+  },
+  {
+   "fieldname": "section_break_wzbz",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "created_by_emp",
+   "fieldtype": "Link",
+   "label": "Created By",
+   "options": "Employee"
+  },
+  {
+   "fetch_from": "created_by_emp.employee_name",
+   "fieldname": "created_by_name",
+   "fieldtype": "Data",
+   "label": "Created By Name"
+  },
+  {
+   "fieldname": "territory",
+   "fieldtype": "Link",
+   "label": "Area",
+   "options": "Territory"
+  },
+  {
+   "fieldname": "contact_number",
+   "fieldtype": "Link",
+   "label": "Contact Number",
+   "options": "Contact Number"
+  },
+  {
+   "fieldname": "address_display",
+   "fieldtype": "Small Text",
+   "label": "Address"
+  },
+  {
+   "fieldname": "shipping_address",
+   "fieldtype": "Small Text",
+   "label": "Shipping Address"
+  },
+  {
+   "fetch_from": "custom_channel_partner.customer_name",
+   "fieldname": "cp_name",
+   "fieldtype": "Data",
+   "label": "Channel Partner Name"
+  },
+  {
+   "fieldname": "custom_channel_partner",
+   "fieldtype": "Link",
+   "label": "Channel Partner",
+   "options": "Customer"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-09-09 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Field Sales",
+ "name": "Secondary Sales Order",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

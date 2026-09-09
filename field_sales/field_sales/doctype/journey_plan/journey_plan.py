@@ -14,7 +14,13 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
-from field_sales import scope
+from field_sales import notify, scope
+
+# Non-initial states of the real ASM -> NSM Workflow (see the Workflow
+# fixture) - a plan lands on "Pending" the moment it's filed, which
+# after_insert already covers; on_update only needs to notify for whatever
+# it moves to next.
+DECIDED_STATES = {"ASM Approved", "Approved", "Rejected"}
 
 
 class JourneyPlan(Document):
@@ -22,6 +28,24 @@ class JourneyPlan(Document):
         self.set_sales_person()
         self.set_territory()
         self.validate_trips()
+
+    def after_insert(self):
+        notify.notify_employee_event(
+            self.sales_person, self.doctype, self.name,
+            _("Journey plan for {0} is waiting on your approval").format(frappe.utils.formatdate(self.visit_date)),
+        )
+
+    def on_update(self):
+        # Fires on every save, including the one after_insert already
+        # covers (workflow_state is "Pending" then, so this is a no-op) -
+        # only the later ASM/NSM transitions actually notify here.
+        if self.has_value_changed("workflow_state") and self.workflow_state in DECIDED_STATES:
+            notify.notify_employee_event(
+                self.sales_person, self.doctype, self.name,
+                _("Journey plan for {0} is now {1}").format(
+                    frappe.utils.formatdate(self.visit_date), self.workflow_state
+                ),
+            )
 
     # ------------------------------------------------------------ defaults
 

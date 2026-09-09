@@ -14,7 +14,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import nowdate
 
-from field_sales import scope
+from field_sales import notify, scope
 
 
 class CustomerOnboarding(Document):
@@ -29,6 +29,18 @@ class CustomerOnboarding(Document):
     def before_submit(self):
         if not self.documents:
             frappe.throw(_("Attach at least one compliance document before submitting."))
+
+    def on_submit(self):
+        # A submitted request sits in "Pending" waiting on a manager's
+        # decision - notify_employee_event notifies the rep's own manager
+        # here specifically because the rep themselves is the one acting
+        # (submitting their own request), matching the rule everywhere else.
+        notify.notify_employee_event(
+            self.sales_person,
+            self.doctype,
+            self.name,
+            _("{0} is waiting on your approval").format(self.customer_name or self.name),
+        )
 
     def set_sales_person(self):
         if self.sales_person:
@@ -313,6 +325,14 @@ def approve_onboarding(name: str, remarks: str | None = None) -> dict:
     if remarks:
         doc.db_set("decision_remarks", remarks)
 
+    # The manager is always the actor here, so notify_employee_event's own
+    # rule (actor never notifies themselves) correctly routes this to the
+    # rep rather than back to whoever just approved it.
+    notify.notify_employee_event(
+        doc.sales_person, doc.doctype, doc.name,
+        _("{0} was approved").format(doc.customer_name or doc.name),
+    )
+
     return {"name": doc.name, "status": "Approved", "customer": customer.name}
 
 
@@ -332,5 +352,10 @@ def reject_onboarding(name: str, remarks: str) -> dict:
     doc.db_set("status", "Rejected")
     doc.db_set("decided_on", nowdate())
     doc.db_set("decision_remarks", remarks.strip())
+
+    notify.notify_employee_event(
+        doc.sales_person, doc.doctype, doc.name,
+        _("{0} was rejected").format(doc.customer_name or doc.name),
+    )
 
     return {"name": doc.name, "status": "Rejected"}

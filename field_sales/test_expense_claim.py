@@ -15,6 +15,7 @@ from field_sales.api.expense_claim import (
 
 REP = "ravi.tsm@demo.local"
 OTHER_REP = "priya.tsm@demo.local"
+MANAGER = "ec.manager.wftest@demo.local"
 
 
 def ensure(doctype, name, values):
@@ -25,6 +26,27 @@ def ensure(doctype, name, values):
     doc.flags.ignore_mandatory = True
     doc.insert(ignore_permissions=True)
     return doc.name
+
+
+def _ensure_manager_user(email):
+    if not frappe.db.exists("User", email):
+        user = frappe.new_doc("User")
+        user.update({
+            "email": email, "first_name": email.split("@")[0],
+            "send_welcome_email": 0, "role_profile_name": None,
+        })
+        user.insert(ignore_permissions=True)
+    if not frappe.db.exists("Employee", {"user_id": email}):
+        emp = frappe.new_doc("Employee")
+        emp.update({
+            "employee_name": email.split("@")[0], "user_id": email, "status": "Active",
+            "company": frappe.defaults.get_global_default("company"),
+            "date_of_joining": frappe.utils.nowdate(), "date_of_birth": "1990-01-01",
+            "gender": "Male",
+        })
+        emp.flags.ignore_mandatory = True
+        emp.insert(ignore_permissions=True)
+    return frappe.db.get_value("Employee", {"user_id": email}, "name")
 
 
 class TestExpenseClaim(FrappeTestCase):
@@ -59,6 +81,7 @@ class TestExpenseClaim(FrappeTestCase):
         frappe.db.rollback()
 
     def _cleanup(self):
+        frappe.db.sql("delete from `tabNotification Log` where document_type = %s", ("Expense Claim",))
         for name in frappe.get_all("Expense Claim", {"employee": self.employee}, pluck="name"):
             doc = frappe.get_doc("Expense Claim", name)
             if doc.docstatus == 1:
@@ -208,3 +231,47 @@ class TestExpenseClaim(FrappeTestCase):
         frappe.set_user(REP)
         submitted = submit_visit_expense_claim(result["name"])
         self.assertEqual(submitted["docstatus"], 1)
+
+    # ------------------------------------------------------------ notifications
+
+    def test_filing_notifies_the_reps_manager(self):
+        manager_emp = _ensure_manager_user(MANAGER)
+        original = frappe.db.get_value("Employee", self.employee, "reports_to")
+        frappe.db.set_value("Employee", self.employee, "reports_to", manager_emp)
+        try:
+            plan = self._plan()
+            result = create_visit_expense_claim(plan.name, expenses=self._expenses())
+            self.assertTrue(frappe.db.exists("Notification Log", {
+                "for_user": MANAGER, "document_type": "Expense Claim", "document_name": result["name"],
+            }))
+        finally:
+            frappe.db.set_value("Employee", self.employee, "reports_to", original)
+
+    def test_approval_notifies_the_rep(self):
+        plan = self._plan()
+        result = create_visit_expense_claim(plan.name, expenses=self._expenses())
+        frappe.set_user("Administrator")
+        doc = frappe.get_doc("Expense Claim", result["name"])
+        doc.approval_status = "Approved"
+        doc.save(ignore_permissions=True)
+        self.assertTrue(frappe.db.exists("Notification Log", {
+            "for_user": REP, "document_type": "Expense Claim", "document_name": result["name"],
+        }))
+
+    def test_a_plain_hr_expense_claim_is_never_notified(self):
+        """fs_journey_plan only exists on a claim filed through this app's
+        own flow - a normal HR-filed claim (no journey plan link) must not
+        trigger a field_sales notification at all."""
+        doc = frappe.new_doc("Expense Claim")
+        doc.update({
+            "employee": self.employee, "expense_approver": "Administrator",
+            "posting_date": nowdate(),
+        })
+        doc.append("expenses", {
+            "expense_type": self.expense_type, "expense_date": nowdate(), "amount": 100,
+        })
+        doc.flags.ignore_mandatory = True
+        doc.insert(ignore_permissions=True)
+        self.assertFalse(frappe.db.exists("Notification Log", {
+            "document_type": "Expense Claim", "document_name": doc.name,
+        }))

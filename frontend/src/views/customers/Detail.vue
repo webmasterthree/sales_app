@@ -5,8 +5,8 @@
         :to="{ name: 'CustomerLedger', params: { name: doc.name } }"
         class="flex items-center justify-between bg-surface rounded-2xl p-4 active:opacity-80"
       >
-        <span class="font-display font-semibold text-ink">View Ledger</span>
-        <Icon name="chevron-right" :size="18" class="text-ink-3" />
+        <span class="font-display font-semibold text-accent-ink">View Ledger</span>
+        <Icon name="chevron-right" :size="18" class="text-accent-ink" />
       </RouterLink>
 
       <div v-if="doc.addresses?.length" class="bg-surface rounded-2xl p-4">
@@ -171,6 +171,12 @@ const config = {
   title: (doc) => doc?.customer_name || doc?.name || "Customer",
   method: "field_sales.api.customers.customer",
   fallback: "/customers",
+  hero: {
+    chips: [
+      { label: "Customer type", key: "customer_level" },
+      { label: "Territory", key: "territory" },
+    ],
+  },
   sections: [
     {
       title: "Overview",
@@ -179,8 +185,6 @@ const config = {
       // Secondary outlet reached through one - see the legacy
       // my_customer_form's identical field split for Primary vs Secondary.
       fields: [
-        { key: "customer_name", label: "Customer name" },
-        { key: "customer_level", label: "Customer type" },
         {
           key: "custom_channel_partner",
           label: "Channel Partner",
@@ -188,7 +192,6 @@ const config = {
           hidden: (doc) => doc.customer_level !== "Secondary",
         },
         { key: "customer_group", label: "Group" },
-        { key: "territory", label: "Territory" },
         { key: "mobile_no", label: "Mobile" },
         { key: "email_id", label: "Email", hidden: (doc) => doc.customer_level === "Secondary" },
         { key: "business_type", label: "Business type", hidden: (doc) => doc.customer_level === "Secondary" },
@@ -202,11 +205,11 @@ const config = {
   actions: [
     {
       label: "Change Request",
-      tone: "muted",
       handler: () => { requestOpen.value = true },
     },
     {
       label: "Change Log",
+      tone: "outline",
       handler: openLog,
     },
   ],

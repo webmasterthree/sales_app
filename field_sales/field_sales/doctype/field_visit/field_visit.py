@@ -12,7 +12,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt, get_datetime, now_datetime, time_diff_in_seconds
 
-from field_sales import geo, scope
+from field_sales import geo, notify, scope
 
 
 class FieldVisit(Document):
@@ -30,6 +30,15 @@ class FieldVisit(Document):
             frappe.throw(_("Check in before submitting the visit."))
         if not self.check_out:
             frappe.throw(_("Check out before submitting the visit."))
+
+    def on_submit(self):
+        party = self.customer_name or self.prospect_name or self.outlet_name or _("a customer")
+        notify.notify_employee_event(
+            self.sales_person,
+            self.doctype,
+            self.name,
+            _("Visit to {0} on {1} was completed").format(party, frappe.utils.formatdate(self.visit_date)),
+        )
 
     # ------------------------------------------------------------ defaults
 

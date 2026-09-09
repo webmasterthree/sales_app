@@ -26,3 +26,28 @@ body {
 .pt-safe {
   padding-top: env(safe-area-inset-top, 0px);
 }
+
+/* This is a phone app, and mobile is the only priority - a desktop browser
+   just gets a narrower, centered reading column so the page doesn't stretch
+   edge-to-edge; it does NOT get a fully boxed "phone frame" any more.
+   A previous version used `transform` on #app to visually box it on wide
+   screens, since transformed ancestors become the containing block for any
+   `position:fixed` descendant (the bottom nav, modals) - but that's exactly
+   what broke on real phones: any device reporting a wide viewport (a phone
+   in "Desktop site" mode, or just a large-screen phone) triggered it, and
+   the "fixed" bottom nav ended up confined to that box instead of the real
+   screen, appearing mid-page instead of pinned to the bottom. Since this
+   app is never actually used on desktop, that risk isn't worth taking for
+   a cosmetic desktop nicety - no transform, so nothing can ever confine
+   position:fixed elements unexpectedly, on any device, at any width. */
+@media (min-width: 641px) {
+  html, body {
+    background: var(--fs-surface-2);
+  }
+  #app {
+    max-width: 430px;
+    margin: 0 auto;
+    min-height: 100%;
+    box-shadow: 0 0 0 1px var(--fs-rule);
+  }
+}

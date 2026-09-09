@@ -294,6 +294,26 @@ class TestSalesOrderWrite(FrappeTestCase):
         result = submit_order(name)
         self.assertEqual(result["docstatus"], 1)
 
+    def test_submit_notifies_the_reps_manager(self):
+        # Sales Order's on_submit hook (field_sales.notify.notify_sales_order_submitted,
+        # wired in hooks.py) - this pins that it actually fires on a real
+        # submit, not just in notify.py's own unit tests.
+        original_manager = frappe.db.get_value("Employee", self.employee, "reports_to")
+        manager_user = frappe.db.get_value("Employee", {"status": "Active", "user_id": ["!=", REP]}, "user_id")
+        self.assertTrue(manager_user, "need a second active Employee with a user_id to act as manager")
+        frappe.db.set_value("Employee", self.employee, "reports_to",
+                             frappe.db.get_value("Employee", {"user_id": manager_user}, "name"))
+        try:
+            name = create_order(**self._payload())["name"]
+            submit_order(name)
+            self.assertTrue(
+                frappe.db.exists("Notification Log", {
+                    "for_user": manager_user, "document_type": "Sales Order", "document_name": name,
+                })
+            )
+        finally:
+            frappe.db.set_value("Employee", self.employee, "reports_to", original_manager)
+
     # ------------------------------------------------------------ gst
     #
     # Confirmed on production: india_compliance's get_gst_details silently

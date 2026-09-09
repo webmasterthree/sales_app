@@ -217,6 +217,45 @@ fixtures = [
 		],
 	},
 	{
+		# customer_level/custom_channel_partner/cp_name/is_dl were originally
+		# fmcg_cp's own Custom Fields on Customer/Sales Order/Issue - field_sales
+		# has read/written them unguarded since the Channel Partner order flow
+		# was built, but never actually owned them (module was left blank on
+		# all of them, so no app's fixtures ever tracked or recreated them).
+		# `Secondary Sales Order`/`Secondary Sales Order Item`/`CP Warehouse`
+		# themselves have been moved into field_sales's own doctype folder for
+		# the same reason - see that migration's notes - so field_sales no
+		# longer needs fmcg_cp installed at all for any of this.
+		"dt": "Custom Field",
+		"filters": [
+			["dt", "in", ["Customer", "Sales Order", "Issue"]],
+			["fieldname", "in", ["customer_level", "custom_channel_partner", "cp_name", "is_dl"]],
+		],
+	},
+	{
+		# custom_shop/shop - same story as the block above, but from
+		# mohan_impex rather than fmcg_cp: catalog.py's create_order derives
+		# every order's mandatory `shop` from the customer's own custom_shop,
+		# unguarded, and always has. The State/District/City/Segment/
+		# Segment Mapping/Base Components/Base Product/Shop doctypes those
+		# depend on have been moved into field_sales's own doctype folder
+		# for the same reason the fmcg_cp doctypes were.
+		"dt": "Custom Field",
+		"filters": [
+			["dt", "in", ["Customer", "Sales Order"]],
+			["fieldname", "in", ["custom_shop", "shop"]],
+		],
+	},
+	{
+		# Item.segment (Table -> Segment Mapping) - catalog.py's
+		# item_list_by_segment filters Item by this table, unguarded.
+		"dt": "Custom Field",
+		"filters": [
+			["dt", "=", "Item"],
+			["fieldname", "=", "segment"],
+		],
+	},
+	{
 		"dt": "Custom DocPerm",
 		"filters": [
 			["parent", "=", "Issue"],
@@ -242,6 +281,18 @@ fixtures = [
 		"dt": "Custom DocPerm",
 		"filters": [
 			["parent", "=", "Expense Claim"],
+			["role", "=", "Sales Executive App"],
+		],
+	},
+	{
+		# Pricing Rule (native ERPNext) has never had a grant for Sales
+		# Executive App either, on any site - only Sales Manager and other
+		# desk-side roles. api/schemes.py's whole feature is a read-only view
+		# over Pricing Rule for exactly this role, so without this every
+		# rep's own Schemes screen 403s outright.
+		"dt": "Custom DocPerm",
+		"filters": [
+			["parent", "=", "Pricing Rule"],
 			["role", "=", "Sales Executive App"],
 		],
 	},
@@ -348,6 +399,8 @@ doc_events = {
 			"field_sales.api.catalog.ensure_contact_mobile",
 		],
 		"before_save": "field_sales.pricing.restore_native_pricing_rules_field",
+		"on_submit": "field_sales.notify.notify_sales_order_submitted",
+		"on_cancel": "field_sales.notify.notify_sales_order_cancelled",
 	},
 	"Employee": {
 		"on_update": "field_sales.migrations.ensure_role_profiles",
@@ -355,5 +408,12 @@ doc_events = {
 	"Pricing Rule": {
 		"on_update": "field_sales.pricing.clear_pricing_rule_cache",
 		"on_trash": "field_sales.pricing.clear_pricing_rule_cache",
+	},
+	"Notification Log": {
+		"after_insert": "field_sales.api.push.send_push_for_notification_log",
+	},
+	"Expense Claim": {
+		"after_insert": "field_sales.notify.notify_expense_claim_created",
+		"on_update": "field_sales.notify.notify_expense_claim_decided",
 	},
 }
