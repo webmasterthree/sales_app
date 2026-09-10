@@ -1,98 +1,99 @@
 <template>
   <div class="min-h-screen bg-ground-home pb-28">
-    <!-- domed brand header -->
-    <div class="relative bg-accent rounded-b-[36px] pt-safe px-4 pb-16">
-      <div class="flex items-center justify-between max-w-2xl mx-auto pt-3">
-        <span class="w-10 h-10" aria-hidden="true" />
-        <h1 class="font-display text-lg font-semibold text-accent-fg">Home</h1>
+    <!-- flat header - no dome, no accent fill, no title text (Home is the
+         landing screen - a bare bell is enough, nothing to label). -->
+    <div class="pt-safe px-4 pb-3">
+      <div class="flex items-center justify-end max-w-2xl mx-auto pt-3">
         <RouterLink
           :to="{ name: 'Notifications' }"
-          class="relative w-10 h-10 flex items-center justify-center rounded-full active:bg-black/10"
+          class="relative w-10 h-10 flex items-center justify-center rounded-full active:bg-surface-2"
           aria-label="Notifications"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--fs-accent-fg)" stroke-width="2" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--fs-ink)" stroke-width="2" aria-hidden="true">
             <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
           </svg>
           <span
             v-if="unread > 0"
-            class="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-crit border-2 border-accent"
+            class="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-crit border-2 border-ground-home"
           />
         </RouterLink>
       </div>
     </div>
 
-    <LoadingSkeleton v-if="loading && !data" :rows="3" class="max-w-2xl mx-auto px-4 -mt-10 relative z-10" />
-    <ErrorState v-else-if="error" :message="error" @retry="load" class="max-w-2xl mx-auto px-4 -mt-10 relative z-10 bg-surface rounded-2xl" />
+    <LoadingSkeleton v-if="loading && !data" :rows="3" class="max-w-2xl mx-auto px-4 relative z-10" />
+    <ErrorState v-else-if="error" :message="error" @retry="load" class="max-w-2xl mx-auto px-4 relative z-10 bg-surface rounded-2xl" />
 
-    <div v-else class="max-w-2xl mx-auto px-4 -mt-14 relative z-10 space-y-5">
-      <!-- floating greeting card, overlapping the header -->
-      <div class="bg-surface rounded-2xl shadow-lg border border-rule p-4">
-        <div class="flex items-start justify-between gap-2 mb-1">
-          <p class="font-display font-semibold text-ink">Hey, {{ data?.user?.full_name || "…" }}</p>
-          <div class="flex items-center gap-1 shrink-0">
+    <div v-else class="max-w-2xl mx-auto px-4 relative z-10 space-y-5">
+      <!-- greeting: a white card with a fading diagonal-stripe pattern
+           bleeding in from the edge - textured without being loud. -->
+      <div class="relative overflow-hidden rounded-2xl bg-surface shadow-lg p-4">
+        <div
+          class="absolute inset-y-0 right-0 w-24 opacity-50"
+          style="
+            background: repeating-linear-gradient(115deg, var(--fs-accent), var(--fs-accent) 6px, var(--fs-accent-soft) 6px, var(--fs-accent-soft) 12px);
+            -webkit-mask-image: linear-gradient(to left, black, transparent);
+            mask-image: linear-gradient(to left, black, transparent);
+          "
+          aria-hidden="true"
+        />
+        <div class="relative">
+          <div class="flex items-center gap-2 mb-1">
+            <p class="font-display font-extrabold text-lg text-ink">Hey, {{ data?.user?.full_name || "…" }}</p>
             <SyncStatus />
-            <StatusPill :status="checkedIn ? 'Checked in' : 'Checked out'" :tone="checkedIn ? 'good' : 'muted'" />
           </div>
-        </div>
-        <p class="text-xs text-ink-2 mb-3">
-          <template v-if="data?.attendance?.last_time">
-            Last {{ data.attendance.last_type === 'IN' ? 'check-in' : 'check-out' }} was at {{ formatTime(data.attendance.last_time) }}
-          </template>
-          <template v-else>{{ greeting }}, ready for the day?</template>
-        </p>
+          <StatusPill :status="checkedIn ? 'Checked in' : 'Checked out'" :tone="checkedIn ? 'good' : 'muted'" class="mb-2" />
+          <p class="text-xs text-ink-2 mb-4">
+            <template v-if="data?.attendance?.last_time">
+              Last {{ data.attendance.last_type === 'IN' ? 'check-in' : 'check-out' }} was at {{ formatTime(data.attendance.last_time) }}
+            </template>
+            <template v-else>{{ greeting }}, ready for the day?</template>
+          </p>
 
-        <div v-if="geoDenied" class="bg-warn/10 text-warn text-sm rounded-[10px] px-3 py-2 mb-3">
-          Location access was denied, so we can't confirm where you're punching in from.
-          You can still punch in without a location, or
-          <button type="button" class="underline" @click="requestLocationAgain">try enabling location again</button>.
-        </div>
+          <div v-if="geoDenied" class="bg-warn/10 text-warn text-sm rounded-[10px] px-3 py-2 mb-3">
+            Location access was denied, so we can't confirm where you're punching in from.
+            You can still punch in without a location, or
+            <button type="button" class="underline" @click="requestLocationAgain">try enabling location again</button>.
+          </div>
 
-        <button
-          type="button"
-          class="w-full h-[52px] rounded-[10px] font-display font-medium bg-action2 text-action2-fg disabled:opacity-60"
-          :disabled="punching"
-          @click="punch"
-        >
-          {{ punching ? "Working…" : (checkedIn ? "Check-out" : "Check-in") }}
-        </button>
+          <button
+            type="button"
+            class="w-full h-[50px] rounded-[13px] font-display font-bold bg-action2 text-action2-fg disabled:opacity-60"
+            :disabled="punching"
+            @click="punch"
+          >
+            {{ checkedIn ? "Check-out" : "Check-in" }}
+          </button>
+        </div>
       </div>
 
-      <!-- score dashboard -->
-      <div v-if="data?.scoreboard?.length">
-        <p class="font-display font-semibold text-ink mb-2">Score Dashboard</p>
-        <div class="grid grid-cols-3 gap-3">
-          <div v-for="s in data.scoreboard" :key="s.name" class="bg-surface rounded-2xl border border-rule p-3 flex flex-col gap-2">
-            <span class="w-8 h-8 rounded-full bg-accent-soft text-accent-ink flex items-center justify-center" aria-hidden="true">
-              <Icon :name="scoreIcon(s.label)" :size="16" />
-            </span>
-            <div>
-              <p class="text-xs text-ink-2">{{ s.label }}</p>
-              <p class="text-lg font-display font-bold text-ink">{{ s.count }}</p>
-            </div>
-          </div>
+      <!-- score dashboard: one console-style row, divided, tabular figures -
+           no per-stat icon chips, matching the ops-console read of the rest
+           of the screen. -->
+      <div v-if="data?.scoreboard?.length" class="bg-surface border border-rule rounded-2xl flex divide-x divide-rule">
+        <div v-for="s in data.scoreboard" :key="s.name" class="flex-1 text-center py-3">
+          <p class="font-display font-bold text-lg text-ink tabular-nums">{{ s.count }}</p>
+          <p class="text-[10px] uppercase tracking-wide text-ink-2 mt-0.5">{{ s.label }}</p>
         </div>
       </div>
 
       <!-- monthly sales target, from ERPNext's own Sales Person / Target
            Detail records - only rendered when a real target exists, never
-           a fabricated percentage against nothing. -->
+           a fabricated percentage against nothing. Shown as a horizontal
+           progress bar rather than a ring, matching the rest of the screen's
+           divided-row language. -->
       <div v-if="target?.has_target" class="bg-surface rounded-2xl border border-rule p-4">
-        <div class="flex items-center gap-4">
-          <svg width="64" height="64" viewBox="0 0 64 64" class="shrink-0">
-            <circle cx="32" cy="32" r="27" fill="none" stroke="var(--fs-rule)" stroke-width="6" />
-            <circle
-              cx="32" cy="32" r="27" fill="none" stroke="var(--fs-accent)" stroke-width="6"
-              stroke-linecap="round" transform="rotate(-90 32 32)"
-              :stroke-dasharray="169.6"
-              :stroke-dashoffset="169.6 * (1 - Math.min(target.percent, 100) / 100)"
-            />
-            <text x="32" y="37" text-anchor="middle" font-size="15" font-weight="700" fill="var(--fs-ink)" font-family="Poppins">{{ target.percent }}%</text>
-          </svg>
-          <div class="min-w-0">
-            <p class="font-display font-semibold text-sm text-ink">{{ target.month }}&rsquo;s sales target</p>
-            <p class="text-xs text-ink-2">₹{{ formatAmount(target.achieved_amount) }} of ₹{{ formatAmount(target.target_amount) }}</p>
-          </div>
+        <div class="flex items-baseline justify-between mb-1">
+          <p class="font-display font-semibold text-sm text-ink">{{ target.month }}&rsquo;s sales target</p>
+          <p class="font-display font-bold text-sm text-accent-ink tabular-nums">{{ target.percent }}%</p>
         </div>
+        <div class="h-1.5 rounded-full bg-surface-2 overflow-hidden mb-2">
+          <div
+            class="h-full rounded-full"
+            style="background: linear-gradient(90deg, var(--fs-accent), var(--fs-chart))"
+            :style="{ width: Math.min(target.percent, 100) + '%' }"
+          />
+        </div>
+        <p class="text-xs text-ink-2 tabular-nums">₹{{ formatAmount(target.achieved_amount) }} of ₹{{ formatAmount(target.target_amount) }}</p>
       </div>
 
       <!-- needs your action: what's actually waiting on this person, not a
@@ -135,31 +136,35 @@
         </RouterLink>
       </div>
 
-      <!-- module grid -->
+      <!-- modules: a divided list rather than a bordered tile grid, matching
+           the console read of the rest of the screen. -->
       <div>
-        <p class="font-display font-semibold text-ink mb-2">Modules</p>
+        <p class="font-display font-semibold text-ink mb-2 text-sm">Modules</p>
         <EmptyState
           v-if="!data?.modules?.length"
           icon="square"
           title="No modules available"
           description="Nothing has been enabled for your account yet. Ask your administrator to check the Field Sales Module setup."
         />
-        <div v-else class="grid grid-cols-2 gap-3">
-          <template v-for="tile in data.modules" :key="tile.name">
-            <RouterLink
-              :to="tile.route"
-              class="bg-surface rounded-2xl border border-rule p-3 flex items-center gap-3 active:opacity-80"
-            >
-              <span class="w-9 h-9 rounded-full bg-accent-soft text-accent-ink flex items-center justify-center shrink-0" aria-hidden="true">
-                <Icon :name="iconFor(tile.icon)" :size="18" />
-              </span>
-              <span class="text-sm text-ink font-display font-medium leading-tight">{{ tile.label }}</span>
-            </RouterLink>
-          </template>
+        <div v-else class="bg-surface border border-rule rounded-2xl divide-y divide-rule overflow-hidden">
+          <RouterLink
+            v-for="tile in data.modules"
+            :key="tile.name"
+            :to="tile.route"
+            class="flex items-center gap-3 px-3 py-2.5 active:bg-surface-2"
+          >
+            <span class="w-8 h-8 rounded-lg bg-accent-soft text-accent-ink flex items-center justify-center shrink-0" aria-hidden="true">
+              <Icon :name="iconFor(tile.icon)" :size="16" />
+            </span>
+            <span class="text-sm text-ink font-display font-medium leading-tight flex-1">{{ tile.label }}</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-ink-3 shrink-0" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+          </RouterLink>
         </div>
       </div>
     </div>
   </div>
+
+  <LocationConfirmModal :model-value="locationConfirm" @confirm="onLocationConfirm" @cancel="onLocationCancel" />
 </template>
 
 <script setup>
@@ -171,9 +176,11 @@ import EmptyState from "@/components/EmptyState.vue"
 import ErrorState from "@/components/ErrorState.vue"
 import LoadingSkeleton from "@/components/LoadingSkeleton.vue"
 import Icon from "@/components/Icon.vue"
+import LocationConfirmModal from "@/components/LocationConfirmModal.vue"
 import { iconFor } from "@/data/modules"
 import { queueWrite } from "@/composables/offlineQueue"
 import { unreadCount } from "@/data/notifications"
+import { buildLocationConfirm } from "@/utils/locationConfirm"
 
 const unread = unreadCount
 const data = ref(null)
@@ -181,22 +188,11 @@ const draftVisit = ref(null)
 const pendingApprovals = ref(0)
 const target = ref(null)
 
-// Presentation-only lookup so the score tiles get a matching glyph instead of
-// a bare dot; falls back gracefully for any label the server sends that we
-// don't recognise yet (same pattern as data/modules.js iconFor).
-function scoreIcon(label) {
-  const l = (label || "").toLowerCase()
-  if (l.includes("visit")) return iconFor("visit")
-  if (l.includes("order")) return iconFor("order")
-  if (l.includes("demo")) return iconFor("demo")
-  if (l.includes("trial") || l.includes("sample")) return iconFor("sample")
-  if (l.includes("customer")) return iconFor("customer")
-  return "square"
-}
 const loading = ref(true)
 const error = ref("")
 const punching = ref(false)
 const geoDenied = ref(false)
+const locationConfirm = ref(null)
 
 const checkedIn = computed(() => !!data.value?.attendance?.checked_in)
 
@@ -207,9 +203,17 @@ const greeting = computed(() => {
   return "Good evening"
 })
 
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
 function formatTime(v) {
   try {
-    return new Date(v.replace(" ", "T")).toLocaleString()
+    const d = new Date(v.replace(" ", "T"))
+    const date = `${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`
+    let hours = d.getHours()
+    const minutes = String(d.getMinutes()).padStart(2, "0")
+    const ampm = hours >= 12 ? "PM" : "AM"
+    hours = hours % 12 || 12
+    return `${date}, ${hours}:${minutes} ${ampm}`
   } catch {
     return v
   }
@@ -265,18 +269,26 @@ function formatAmount(v) {
   return Math.round(v || 0).toLocaleString("en-IN")
 }
 
-function getPosition() {
+// A recent cached fix (up to a minute old) resolves almost instantly in the
+// common case; a slower dedicated GPS request only runs as a fallback.
+function requestPosition(options) {
   return new Promise((resolve) => {
-    if (!navigator.geolocation) return resolve(null)
     navigator.geolocation.getCurrentPosition(
       (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
       (err) => {
         if (err.code === err.PERMISSION_DENIED) geoDenied.value = true
         resolve(null)
       },
-      { timeout: 8000, maximumAge: 30000 }
+      options
     )
   })
+}
+
+async function getPosition() {
+  if (!navigator.geolocation) return null
+  const quick = await requestPosition({ enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 })
+  if (quick) return quick
+  return requestPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
 }
 
 function requestLocationAgain() {
@@ -284,11 +296,42 @@ function requestLocationAgain() {
   getPosition()
 }
 
+// The map popup is the final confirmation step, not a receipt: the actual
+// punch only fires once the rep taps Confirm.
+let confirmResolve = null
+
+function askLocationConfirm(label, confirmLabel, pos) {
+  locationConfirm.value = { ...buildLocationConfirm(label, pos), confirmLabel }
+  return new Promise((resolve) => {
+    confirmResolve = resolve
+  })
+}
+
+function onLocationConfirm() {
+  locationConfirm.value = null
+  confirmResolve?.(true)
+  confirmResolve = null
+}
+
+function onLocationCancel() {
+  locationConfirm.value = null
+  confirmResolve?.(false)
+  confirmResolve = null
+}
+
 async function punch() {
   punching.value = true
   try {
     const pos = await getPosition()
     const logType = checkedIn.value ? "OUT" : "IN"
+    if (pos) {
+      const proceed = await askLocationConfirm(
+        logType === "IN" ? "Check in here?" : "Check out here?",
+        logType === "IN" ? "Confirm Check-in" : "Confirm Check-out",
+        pos
+      )
+      if (!proceed) return
+    }
     const result = await queueWrite({
       method: "field_sales.api.home.punch",
       args: { log_type: logType, latitude: pos?.latitude, longitude: pos?.longitude },

@@ -8,8 +8,44 @@
     :on-submit="createRequest"
     @saved="onSaved"
   >
-    <template #step-0="{ data }">
+    <template #step-0="{ data, errors }">
       <div class="space-y-4">
+        <!-- Who the collateral is for - same gap and same fix as
+             SampleForm.vue: REQUEST_WRITABLE_FIELDS already accepted
+             party_type/customer/prospect_name, this form just never sent them. -->
+        <div class="bg-surface rounded-2xl p-4 space-y-3">
+          <div>
+            <label class="block text-sm font-display text-ink-2 mb-1">Who is this for? <span class="text-crit">*</span></label>
+            <div class="flex gap-2">
+              <button
+                v-for="opt in ['Customer', 'Prospect']"
+                :key="opt"
+                type="button"
+                class="flex-1 py-2 rounded-[10px] text-sm font-display border"
+                :class="data.party_type === opt ? 'bg-accent text-accent-fg border-accent' : 'bg-surface border-rule text-ink-2'"
+                @click="data.party_type = opt"
+              >
+                {{ opt }}
+              </button>
+            </div>
+          </div>
+          <CustomerPicker
+            v-if="data.party_type === 'Customer'"
+            label="Customer *"
+            :multiple="false"
+            :model-value="data.customer"
+            @update:model-value="data.customer = $event"
+          />
+          <div v-else>
+            <label class="block text-sm font-display text-ink-2 mb-1">Prospect name <span class="text-crit">*</span></label>
+            <input
+              v-model="data.prospect_name"
+              class="w-full h-[44px] rounded-[10px] border border-rule bg-surface px-3 text-sm"
+              :class="errors.prospect_name ? 'border-crit' : ''"
+            />
+          </div>
+        </div>
+
         <div class="bg-surface rounded-2xl p-4 space-y-3">
           <div class="flex items-center justify-between">
             <label class="text-sm font-display text-ink-2">Requested material <span class="text-crit">*</span></label>
@@ -61,11 +97,15 @@ import { ref } from "vue"
 import { useRouter } from "vue-router"
 import { call } from "frappe-ui"
 import FormView from "@/components/FormView.vue"
+import CustomerPicker from "@/components/CustomerPicker.vue"
 import { queueWrite } from "@/composables/offlineQueue"
 
 const router = useRouter()
 
 const initialData = {
+  party_type: "Customer",
+  customer: "",
+  prospect_name: "",
   purpose: "",
   items: [], // {collateral, collateral_name, qty}
 }
@@ -107,6 +147,8 @@ const steps = [
     title: "Collateral request",
     fields: [],
     validate: (d) => {
+      if (d.party_type === "Customer" && !d.customer) return "Select the customer this material is for."
+      if (d.party_type === "Prospect" && !d.prospect_name) return "Enter a name for the prospect this material is for."
       if (!d.items.length) return "Add at least one item."
       if (d.items.some((r) => !r.qty)) return "Every item needs a quantity."
       return ""
@@ -116,14 +158,24 @@ const steps = [
 
 async function createRequest(data) {
   const args = {
+    party_type: data.party_type,
+    customer: data.party_type === "Customer" ? data.customer : undefined,
+    prospect_name: data.party_type === "Prospect" ? data.prospect_name : undefined,
     purpose: data.purpose || undefined,
     items: data.items.map((r) => ({ collateral: r.collateral, description: r.description, qty: r.qty })),
   }
-  return queueWrite({
+  const created = await queueWrite({
     method: "field_sales.api.requests.create_collateral_request",
     args,
     label: "New collateral request",
   })
+  // Same reasoning as SampleForm.vue: the button reads "Submit request", and
+  // there is no allow-draft step here, so create and submit happen as one
+  // user action instead of leaving the request stuck at docstatus 0.
+  if (!created.queued && created?.name) {
+    await call("field_sales.api.requests.submit_collateral_request", { name: created.name })
+  }
+  return created
 }
 
 function onSaved(result) {

@@ -1,28 +1,13 @@
-import { ref, watchEffect } from "vue"
+// The app is dark-only now (an explicit product decision, not a default -
+// see Settings.vue, whose Appearance picker was removed along with this).
+// applyTheme still exists as the one place that stamps documentElement, so
+// nothing else has to know how the "dark" token is actually applied.
+export const themeChoice = "dark"
 
-const STORAGE_KEY = "field_sales:theme"
-
-export const themeChoice = ref(localStorage.getItem(STORAGE_KEY) || "system")
-
-export function applyTheme(choice) {
-  const root = document.documentElement
-  if (choice === "light") {
-    root.dataset.theme = "light"
-  } else if (choice === "dark") {
-    root.dataset.theme = "dark"
-  } else {
-    delete root.dataset.theme
-  }
-}
-
-export function setTheme(choice) {
-  themeChoice.value = choice
-  localStorage.setItem(STORAGE_KEY, choice)
-  applyTheme(choice)
+export function applyTheme() {
+  document.documentElement.dataset.theme = "dark"
 }
 
 export function initTheme() {
-  applyTheme(themeChoice.value)
+  applyTheme()
 }
-
-watchEffect(() => applyTheme(themeChoice.value))

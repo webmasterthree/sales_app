@@ -176,6 +176,65 @@ def _first_valid_price(filters: dict, txn_date: str):
 # ---------------------------------------------------------------- rules
 
 
+def clear_pricing_rule_cache(doc=None, method=None):
+    """Invalidate the request-scoped Pricing Rule cache below.
+
+    Registered on Pricing Rule's on_update/on_trash (see hooks.py) so a
+    change takes effect on the very next price lookup - including within
+    the same request, where frappe.local would otherwise keep serving a
+    stale snapshot from before the edit.
+    """
+    if hasattr(frappe.local, "field_sales_pricing_rules"):
+        del frappe.local.field_sales_pricing_rules
+
+
+def _active_selling_rules() -> list[dict]:
+    """Every enabled selling Pricing Rule, with its item-code restriction (if
+    any) attached as ``_item_codes`` - fetched once and cached for the rest
+    of this request.
+
+    calculate_rate runs once per order line, and enforce_sales_order_rates
+    calls it for every line on every save. With ~1,200 active rules in
+    production, re-running this same unfiltered `frappe.get_all` plus one
+    extra `Pricing Rule Item Code` query *per rule* on every single call
+    turned adding a handful of items to an order into several thousand
+    queries. None of that work depends on which item is being priced, so it
+    only needs to happen once per request, not once per line.
+    """
+    cached = getattr(frappe.local, "field_sales_pricing_rules", None)
+    if cached is not None:
+        return cached
+
+    rules = frappe.get_all(
+        "Pricing Rule",
+        filters={"disable": 0, "selling": 1},
+        fields=[
+            "name", "title", "priority", "rate_or_discount", "rate",
+            "discount_percentage", "discount_amount", "min_qty", "max_qty",
+            "warehouse", "valid_from", "valid_upto",
+            "custom_delivery_term", "custom_payment_terms_template",
+        ],
+        ignore_permissions=True,
+    )
+
+    item_codes_by_rule: dict[str, set] = {}
+    if rules:
+        for row in frappe.get_all(
+            "Pricing Rule Item Code",
+            filters={"parent": ["in", [r.name for r in rules]]},
+            fields=["parent", "item_code"],
+            ignore_permissions=True,
+        ):
+            item_codes_by_rule.setdefault(row.parent, set()).add(row.item_code)
+
+    for rule in rules:
+        # None means "no item restriction, applies to every item"
+        rule["_item_codes"] = item_codes_by_rule.get(rule.name)
+
+    frappe.local.field_sales_pricing_rules = rules
+    return rules
+
+
 def find_pricing_rules(
     item_code: str,
     qty: float = 1,
@@ -193,20 +252,8 @@ def find_pricing_rules(
     txn_date = transaction_date or nowdate()
     warehouses = warehouse_chain(warehouse)
 
-    rules = frappe.get_all(
-        "Pricing Rule",
-        filters={"disable": 0, "selling": 1},
-        fields=[
-            "name", "title", "priority", "rate_or_discount", "rate",
-            "discount_percentage", "discount_amount", "min_qty", "max_qty",
-            "warehouse", "valid_from", "valid_upto",
-            "custom_delivery_term", "custom_payment_terms_template",
-        ],
-        ignore_permissions=True,
-    )
-
     matched = []
-    for rule in rules:
+    for rule in _active_selling_rules():
         if rule.valid_from and str(rule.valid_from) > str(txn_date):
             continue
         if rule.valid_upto and str(rule.valid_upto) < str(txn_date):
@@ -227,22 +274,12 @@ def find_pricing_rules(
             and rule.custom_payment_terms_template != payment_terms_template
         ):
             continue
-        if not _rule_covers_item(rule.name, item_code):
+        if rule["_item_codes"] is not None and item_code not in rule["_item_codes"]:
             continue
         matched.append(rule)
 
     matched.sort(key=lambda r: cint(r.priority), reverse=True)
     return matched
-
-
-def _rule_covers_item(rule_name: str, item_code: str) -> bool:
-    items = frappe.get_all(
-        "Pricing Rule Item Code",
-        filters={"parent": rule_name},
-        pluck="item_code",
-        ignore_permissions=True,
-    )
-    return item_code in items if items else True
 
 
 def apply_rule(rate: float, rule: dict) -> tuple[float, float]:
@@ -372,8 +409,24 @@ def enforce_sales_order_rates(doc, method=None):
                 transaction_date=str(doc.get("transaction_date") or nowdate()),
             )
         except PriceNotFound:
-            # Surface it rather than pricing at zero.
-            raise
+            # No Item Price exists at all - the only number left to book
+            # against is whatever rate the rep typed on the line itself
+            # (Sales Order Item.rate - the standard field, nothing custom).
+            # This can't be used to undercut a price that does exist: every
+            # other branch below overwrites the client's rate the moment a
+            # real price is found (submitted != computed), so a manual rate
+            # only ever survives when calculate_rate has already raised.
+            manual_rate = flt(item.get("rate"))
+            if manual_rate > 0:
+                result = {"base_rate": None, "final_rate": manual_rate, "pricing_rules_applied": []}
+            else:
+                frappe.throw(
+                    frappe._(
+                        "{0} has no price on file for {1}. Enter a rate for "
+                        "this line manually, or remove the item."
+                    ).format(item.item_code, doc.customer),
+                    PriceNotFound,
+                )
 
         submitted = flt(item.rate)
         computed = flt(result["final_rate"])
@@ -391,3 +444,31 @@ def enforce_sales_order_rates(doc, method=None):
 
     # our rates are final; stop ERPNext recomputing over the top
     doc.ignore_pricing_rule = 1
+
+
+def restore_native_pricing_rules_field(doc, method=None):
+    """Mirror our own result onto Sales Order Item's native `pricing_rules`
+    field, so the standard desk item grid's "view applied pricing rules"
+    icon and any report/consumer reading that field directly (rather than
+    our own custom_pricing_rules_applied) still works.
+
+    Registered on `before_save`, separately from enforce_sales_order_rates
+    on `before_validate`. ERPNext's own accounts_controller.validate() -> is
+    called between those two events, and calls set_missing_item_details()
+    unconditionally (not gated on ignore_pricing_rule - see
+    accounts_controller.py's set_missing_values). That path reaches
+    get_pricing_rule_for_item, which - specifically because we've set
+    ignore_pricing_rule=1 - takes the branch that calls
+    remove_pricing_rule_for_item and blanks the field straight back out.
+    So anything written to `pricing_rules` during before_validate is always
+    gone by the time validate() finishes; before_save runs after that, once
+    ERPNext's own clearing is done, so the value written here survives.
+    Same shape ERPNext itself writes: a JSON array of rule names, or "" when
+    none matched - taken from custom_pricing_rules_applied, already computed.
+    """
+    for item in doc.get("items") or []:
+        if not item.meta.has_field("pricing_rules"):
+            continue
+        applied = frappe.parse_json(item.get("custom_pricing_rules_applied") or "[]")
+        rule_names = [r["rule"] for r in applied]
+        item.pricing_rules = frappe.as_json(rule_names) if rule_names else ""

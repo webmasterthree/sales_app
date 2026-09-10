@@ -202,6 +202,112 @@ role_home_page = {
 # every Notification Log insert after each migrate - see migrations.py.
 after_migrate = "field_sales.migrations.after_migrate"
 
+# Custom fields field_sales grafts onto doctypes it doesn't own (Sales
+# Order, Address, Issue, Customer), plus the Issue DocPerm grant for the
+# Sales Executive App role. Without this, `bench migrate` on a fresh site
+# never creates them - they'd only exist as ad-hoc database state on
+# whichever site they were first added to, exactly the trap this app fell
+# into: this list exists because that already happened once.
+fixtures = [
+	{
+		"dt": "Custom Field",
+		"filters": [
+			["dt", "in", ["Sales Order", "Secondary Sales Order", "Address", "Issue", "Customer", "Expense Claim"]],
+			["fieldname", "like", "fs_%"],
+		],
+	},
+	{
+		# customer_level/custom_channel_partner/cp_name/is_dl were originally
+		# fmcg_cp's own Custom Fields on Customer/Sales Order/Issue - field_sales
+		# has read/written them unguarded since the Channel Partner order flow
+		# was built, but never actually owned them (module was left blank on
+		# all of them, so no app's fixtures ever tracked or recreated them).
+		# `Secondary Sales Order`/`Secondary Sales Order Item`/`CP Warehouse`
+		# themselves have been moved into field_sales's own doctype folder for
+		# the same reason - see that migration's notes - so field_sales no
+		# longer needs fmcg_cp installed at all for any of this.
+		"dt": "Custom Field",
+		"filters": [
+			["dt", "in", ["Customer", "Sales Order", "Issue"]],
+			["fieldname", "in", ["customer_level", "custom_channel_partner", "cp_name", "is_dl"]],
+		],
+	},
+	{
+		# custom_shop/shop - same story as the block above, but from
+		# mohan_impex rather than fmcg_cp: catalog.py's create_order derives
+		# every order's mandatory `shop` from the customer's own custom_shop,
+		# unguarded, and always has. The State/District/City/Segment/
+		# Segment Mapping/Base Components/Base Product/Shop doctypes those
+		# depend on have been moved into field_sales's own doctype folder
+		# for the same reason the fmcg_cp doctypes were.
+		"dt": "Custom Field",
+		"filters": [
+			["dt", "in", ["Customer", "Sales Order"]],
+			["fieldname", "in", ["custom_shop", "shop"]],
+		],
+	},
+	{
+		# Item.segment (Table -> Segment Mapping) - catalog.py's
+		# item_list_by_segment filters Item by this table, unguarded.
+		"dt": "Custom Field",
+		"filters": [
+			["dt", "=", "Item"],
+			["fieldname", "=", "segment"],
+		],
+	},
+	{
+		"dt": "Custom DocPerm",
+		"filters": [
+			["parent", "=", "Issue"],
+			["role", "=", "Sales Executive App"],
+		],
+	},
+	{
+		# Secondary Sales Order (fmcg_cp) ships with no permission for any
+		# field-rep role at all - only System Manager - so a rep's own
+		# Channel Partner order flow would 403 on every call without this,
+		# the same gap Issue had before the grant above.
+		"dt": "Custom DocPerm",
+		"filters": [
+			["parent", "=", "Secondary Sales Order"],
+			["role", "=", "Sales Executive App"],
+		],
+	},
+	{
+		# Expense Claim (hrms) ships permission for the standard "Employee"
+		# role (create/write, but no submit) - not for Sales Executive App,
+		# and a rep's own Employee record may not even carry "Employee"
+		# itself. Same gap, same fix as the two grants above.
+		"dt": "Custom DocPerm",
+		"filters": [
+			["parent", "=", "Expense Claim"],
+			["role", "=", "Sales Executive App"],
+		],
+	},
+	{
+		# Pricing Rule (native ERPNext) has never had a grant for Sales
+		# Executive App either, on any site - only Sales Manager and other
+		# desk-side roles. api/schemes.py's whole feature is a read-only view
+		# over Pricing Rule for exactly this role, so without this every
+		# rep's own Schemes screen 403s outright.
+		"dt": "Custom DocPerm",
+		"filters": [
+			["parent", "=", "Pricing Rule"],
+			["role", "=", "Sales Executive App"],
+		],
+	},
+	{
+		# The real Journey Plan approval chain (Pending -> ASM Approved ->
+		# Approved, with Reject/revise branches) - originally hand-built in
+		# Desk on production only, so a fresh site (including this bench's
+		# own local one) never had it. Tracked as a fixture from here on so
+		# `bench migrate` provisions it everywhere, the same reason every
+		# other fixture in this list exists.
+		"dt": "Workflow",
+		"filters": [["name", "=", "Journey Plan"]],
+	},
+]
+
 # Overriding Methods
 # ------------------------------
 #
@@ -282,8 +388,32 @@ after_migrate = "field_sales.migrations.after_migrate"
 # the server recalculates it on every save, whatever the origin.
 # This must run on before_validate: the controller computes amounts and totals
 # during validate, so correcting a rate afterwards would leave them stale.
+#
+# Employee.on_update also runs field_sales.migrations.ensure_role_profiles,
+# which counters mohan_impex's own on_update handler for the same event -
+# see migrations.py for why that's needed.
 doc_events = {
 	"Sales Order": {
-		"before_validate": "field_sales.pricing.enforce_sales_order_rates",
+		"before_validate": [
+			"field_sales.pricing.enforce_sales_order_rates",
+			"field_sales.api.catalog.ensure_contact_mobile",
+		],
+		"before_save": "field_sales.pricing.restore_native_pricing_rules_field",
+		"on_submit": "field_sales.notify.notify_sales_order_submitted",
+		"on_cancel": "field_sales.notify.notify_sales_order_cancelled",
+	},
+	"Employee": {
+		"on_update": "field_sales.migrations.ensure_role_profiles",
+	},
+	"Pricing Rule": {
+		"on_update": "field_sales.pricing.clear_pricing_rule_cache",
+		"on_trash": "field_sales.pricing.clear_pricing_rule_cache",
+	},
+	"Notification Log": {
+		"after_insert": "field_sales.api.push.send_push_for_notification_log",
+	},
+	"Expense Claim": {
+		"after_insert": "field_sales.notify.notify_expense_claim_created",
+		"on_update": "field_sales.notify.notify_expense_claim_decided",
 	},
 }

@@ -7,11 +7,18 @@
  "engine": "InnoDB",
  "field_order": [
   "sec_geo",
-  "enforce_geofence",
   "geofence_radius",
   "cb_geo",
   "geofence_behaviour",
-  "anchor_on_first_visit"
+  "anchor_on_first_visit",
+  "sec_support",
+  "support_phone",
+  "support_email",
+  "cb_support",
+  "support_hours",
+  "sec_legal",
+  "privacy_policy",
+  "terms_of_use"
  ],
  "fields": [
   {
@@ -20,16 +27,8 @@
    "label": "Geofencing"
   },
   {
-   "default": "1",
-   "description": "Check the rep's position against the outlet when they check in.",
-   "fieldname": "enforce_geofence",
-   "fieldtype": "Check",
-   "label": "Enforce Geofence"
-  },
-  {
    "default": "200",
-   "depends_on": "enforce_geofence",
-   "description": "How close the rep must be to the outlet, in metres.",
+   "description": "How close the rep must be to the outlet, in metres. Geofencing is always on - this only tunes it.",
    "fieldname": "geofence_radius",
    "fieldtype": "Int",
    "label": "Geofence Radius (m)"
@@ -40,7 +39,6 @@
   },
   {
    "default": "Warn",
-   "depends_on": "enforce_geofence",
    "description": "Warn records the distance and lets the visit continue. Block refuses the check-in. GPS drifts and basements have no signal, so Block will generate support calls.",
    "fieldname": "geofence_behaviour",
    "fieldtype": "Select",
@@ -49,11 +47,56 @@
   },
   {
    "default": "1",
-   "depends_on": "enforce_geofence",
    "description": "If the outlet has no coordinates yet, use the first check-in position as its location.",
    "fieldname": "anchor_on_first_visit",
    "fieldtype": "Check",
    "label": "Set Outlet Location On First Visit"
+  },
+  {
+   "fieldname": "sec_support",
+   "fieldtype": "Section Break",
+   "label": "Support"
+  },
+  {
+   "description": "Shown to every signed-in rep on their Profile page.",
+   "fieldname": "support_phone",
+   "fieldtype": "Data",
+   "label": "Support Phone"
+  },
+  {
+   "fieldname": "support_email",
+   "fieldtype": "Data",
+   "label": "Support Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "cb_support",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Mon–Sat, 9:00 AM – 6:00 PM IST",
+   "fieldname": "support_hours",
+   "fieldtype": "Data",
+   "label": "Support Hours"
+  },
+  {
+   "fieldname": "sec_legal",
+   "fieldtype": "Section Break",
+   "label": "Legal"
+  },
+  {
+   "default": "Contact your administrator for the current Privacy Policy.",
+   "description": "Shown on Profile. May be plain text or a link to a hosted policy.",
+   "fieldname": "privacy_policy",
+   "fieldtype": "Long Text",
+   "label": "Privacy Policy"
+  },
+  {
+   "default": "Contact your administrator for the current Terms of Use.",
+   "description": "Shown on Profile. May be plain text or a link to a hosted policy.",
+   "fieldname": "terms_of_use",
+   "fieldtype": "Long Text",
+   "label": "Terms Of Use"
   }
  ],
  "grid_page_length": 50,

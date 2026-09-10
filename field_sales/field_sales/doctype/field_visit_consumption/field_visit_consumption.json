@@ -42,10 +42,11 @@
    "fieldtype": "Column Break"
   },
   {
+   "description": "The product's real segment (Segment doctype) - same taxonomy as the pitched-items segment, not the unrelated Application Segment master.",
    "fieldname": "segment",
    "fieldtype": "Link",
-   "label": "Application Segment",
-   "options": "Application Segment"
+   "label": "Segment",
+   "options": "Segment"
   },
   {
    "description": "Customer's own grading of this product.",

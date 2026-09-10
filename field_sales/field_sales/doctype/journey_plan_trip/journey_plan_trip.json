@@ -1,0 +1,115 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-25 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "travel_state_from",
+  "travel_from_district",
+  "travel_from_city",
+  "cb_from_to",
+  "same_as_from_address",
+  "travel_to_state",
+  "travel_to_district",
+  "travel_to_city",
+  "cb_mode",
+  "mode_of_travel",
+  "primary_customer",
+  "secondary_customer"
+ ],
+ "fields": [
+  {
+   "columns": 2,
+   "fieldname": "travel_state_from",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "From State"
+  },
+  {
+   "fieldname": "travel_from_district",
+   "fieldtype": "Data",
+   "label": "From District"
+  },
+  {
+   "columns": 2,
+   "fieldname": "travel_from_city",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "From City"
+  },
+  {
+   "fieldname": "cb_from_to",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "The leg starts where the previous one ended.",
+   "fieldname": "same_as_from_address",
+   "fieldtype": "Check",
+   "label": "Same As From Address"
+  },
+  {
+   "depends_on": "eval:!doc.same_as_from_address",
+   "fieldname": "travel_to_state",
+   "fieldtype": "Data",
+   "label": "To State"
+  },
+  {
+   "depends_on": "eval:!doc.same_as_from_address",
+   "fieldname": "travel_to_district",
+   "fieldtype": "Data",
+   "label": "To District"
+  },
+  {
+   "columns": 2,
+   "depends_on": "eval:!doc.same_as_from_address",
+   "fieldname": "travel_to_city",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "To City"
+  },
+  {
+   "fieldname": "cb_mode",
+   "fieldtype": "Column Break"
+  },
+  {
+   "columns": 2,
+   "fieldname": "mode_of_travel",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Mode of Travel",
+   "options": "Travel Mode",
+   "reqd": 1
+  },
+  {
+   "description": "Comma-separated customer names visited on this leg.",
+   "fieldname": "primary_customer",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Primary Customer(s)"
+  },
+  {
+   "description": "Channel-partner-scoped customers, when this leg is made through a partner.",
+   "fieldname": "secondary_customer",
+   "fieldtype": "Small Text",
+   "label": "Secondary Customer(s)"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-25 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Field Sales",
+ "name": "Journey Plan Trip",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

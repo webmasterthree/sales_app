@@ -12,6 +12,10 @@ from field_sales.api.requests import (
     COLLATERAL_LIBRARY_CONFIG,
     SAMPLE_CONFIG,
     collateral_library,
+    create_collateral_request,
+    create_sample_request,
+    submit_collateral_request,
+    submit_sample_request,
 )
 
 TERRITORY = "Kolkata Area"
@@ -163,6 +167,87 @@ class TestRequests(FrappeTestCase):
         finally:
             frappe.set_user("Administrator")
 
+    def test_submit_sample_request_reaches_docstatus_1(self):
+        """The "Submit request" button in SampleForm.vue was previously a
+        dead end - create_sample_request only ever inserts a draft, and
+        nothing in the app ever called doc.submit() on one. This is the gap
+        submit_sample_request closes."""
+        doc = self._sample()
+        self.assertEqual(doc.docstatus, 0)
+        frappe.set_user("ravi.tsm@demo.local")
+        try:
+            result = submit_sample_request(doc.name)
+        finally:
+            frappe.set_user("Administrator")
+        self.assertEqual(result["docstatus"], 1)
+        doc.reload()
+        self.assertEqual(doc.docstatus, 1)
+
+    # ------------------------------------------------------------ party required
+    #
+    # SampleForm.vue/CollateralForm.vue never collected who a request was
+    # for - REQUEST_WRITABLE_FIELDS already accepted customer/prospect_name,
+    # so an existing record could carry one, but a client that never sent it
+    # (as neither form did) saved silently with a blank party. _require_party
+    # is the server-side half of the fix; these prove it can't be bypassed
+    # by a direct API call even though the doctype's own JSON doesn't mark
+    # customer as mandatory.
+
+    def test_create_sample_request_refuses_no_customer(self):
+        frappe.set_user("ravi.tsm@demo.local")
+        try:
+            with self.assertRaises(frappe.ValidationError):
+                create_sample_request(items=[{"item_code": self.item, "qty": 1, "uom": "Kg"}])
+        finally:
+            frappe.set_user("Administrator")
+
+    def test_create_sample_request_accepts_a_customer(self):
+        frappe.set_user("ravi.tsm@demo.local")
+        try:
+            result = create_sample_request(
+                customer=self.customer,
+                required_by=add_days(nowdate(), 5),
+                items=[{"item_code": self.item, "qty": 1, "uom": "Kg"}],
+            )
+        finally:
+            frappe.set_user("Administrator")
+        doc = frappe.get_doc("Sample Request", result["name"])
+        self.assertEqual(doc.customer, self.customer)
+
+    def test_create_sample_request_accepts_a_prospect(self):
+        frappe.set_user("ravi.tsm@demo.local")
+        try:
+            result = create_sample_request(
+                party_type="Prospect",
+                prospect_name="FS Test Sample Prospect",
+                required_by=add_days(nowdate(), 5),
+                items=[{"item_code": self.item, "qty": 1, "uom": "Kg"}],
+            )
+        finally:
+            frappe.set_user("Administrator")
+        doc = frappe.get_doc("Sample Request", result["name"])
+        self.assertEqual(doc.prospect_name, "FS Test Sample Prospect")
+
+    def test_create_collateral_request_refuses_no_customer(self):
+        frappe.set_user("ravi.tsm@demo.local")
+        try:
+            with self.assertRaises(frappe.ValidationError):
+                create_collateral_request(items=[{"description": "Danglers", "qty": 5}])
+        finally:
+            frappe.set_user("Administrator")
+
+    def test_create_collateral_request_accepts_a_customer(self):
+        frappe.set_user("ravi.tsm@demo.local")
+        try:
+            result = create_collateral_request(
+                customer=self.customer,
+                items=[{"description": "Danglers", "qty": 5}],
+            )
+        finally:
+            frappe.set_user("Administrator")
+        doc = frappe.get_doc("Collateral Request", result["name"])
+        self.assertEqual(doc.customer, self.customer)
+
     def test_sample_list_mine_toggle(self):
         mine = self._sample(employee=self.employee)
         theirs = self._sample(employee=self.other_employee)
@@ -185,6 +270,20 @@ class TestRequests(FrappeTestCase):
         doc = self._collateral_request()
         self.assertIsNone(doc.items[0].collateral)
         self.assertEqual(doc.items[0].description, "Counter danglers")
+
+    def test_submit_collateral_request_reaches_docstatus_1(self):
+        """Same gap, same fix as submit_sample_request above - Collateral
+        Request could never be submitted before either."""
+        doc = self._collateral_request()
+        self.assertEqual(doc.docstatus, 0)
+        frappe.set_user("ravi.tsm@demo.local")
+        try:
+            result = submit_collateral_request(doc.name)
+        finally:
+            frappe.set_user("Administrator")
+        self.assertEqual(result["docstatus"], 1)
+        doc.reload()
+        self.assertEqual(doc.docstatus, 1)
 
     def test_collateral_request_list(self):
         doc = self._collateral_request()

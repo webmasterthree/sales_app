@@ -88,7 +88,6 @@ def _tile(row) -> dict:
 SCORES = [
     ("visits", "Visits", "Field Visit", "sales_person", "visit_date"),
     ("orders", "Orders", "Sales Order", None, "transaction_date"),
-    ("demos", "Demos", "Product Demo", "sales_person", "demo_date"),
 ]
 
 
@@ -186,8 +185,14 @@ def sales_target(user: str | None = None) -> dict:
     percent = round((achieved / monthly_target) * 100) if monthly_target else 0
     return {
         "has_target": True,
-        "target_amount": monthly_target,
-        "achieved_amount": achieved,
+        # Rounded here, at the source, rather than left to whichever caller
+        # happens to format it - a Monthly Distribution's percentage_allocation
+        # is a stored decimal (e.g. 100/12 = 8.333...%), so the raw computed
+        # amount is very rarely a clean rupee figure even when the underlying
+        # target obviously should be (an even 12-way split of ₹5,40,000 comes
+        # back as ₹44,999.999998, not ₹45,000, without this).
+        "target_amount": round(monthly_target, 2),
+        "achieved_amount": round(achieved, 2),
         "percent": min(percent, 999),  # cap the display, not the underlying fact of over-achieving
         "month": month_name,
     }

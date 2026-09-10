@@ -12,12 +12,15 @@
         <p class="text-xs text-ink-2 mb-1">Remarks</p>
         <p class="text-sm">{{ doc.purpose }}</p>
       </div>
+
+      <CommentThread doctype="Collateral Request" :docname="doc.name" />
     </template>
   </DetailView>
 </template>
 
 <script setup>
 import DetailView from "@/components/DetailView.vue"
+import CommentThread from "@/components/CommentThread.vue"
 
 defineProps({ name: { type: String, required: true } })
 

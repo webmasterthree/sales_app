@@ -38,12 +38,15 @@
           </div>
         </div>
       </div>
+
+      <CommentThread doctype="Product Demo" :docname="doc.name" />
     </template>
   </DetailView>
 </template>
 
 <script setup>
 import DetailView from "@/components/DetailView.vue"
+import CommentThread from "@/components/CommentThread.vue"
 
 defineProps({ name: { type: String, required: true } })
 
@@ -70,6 +73,14 @@ const config = {
         { key: "customer_name", label: "Customer" },
         { key: "prospect_name", label: "Prospect" },
         { key: "outlet_name", label: "Outlet" },
+        { key: "contact_person", label: "Contact" },
+        { key: "contact_number", label: "Contact number" },
+        { key: "location", label: "Existing address" },
+        { key: "address_line1", label: "Address line 1" },
+        { key: "address_line2", label: "Address line 2" },
+        { key: "city", label: "City" },
+        { key: "state", label: "State" },
+        { key: "pincode", label: "Pincode" },
         { key: "territory", label: "Territory" },
         { key: "sales_person_name", label: "Rep" },
       ],

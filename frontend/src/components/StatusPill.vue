@@ -22,11 +22,18 @@ const props = defineProps({
 const TONE_MAP = {
   draft: "muted",
   pending: "warn",
+  filed: "warn",
+  "asm approved": "accent",
+  ongoing: "warn",
   submitted: "accent",
   open: "warn",
   "to deliver": "warn",
   "to deliver and bill": "warn",
   approved: "good",
+  confirmed: "good",
+  scheduled: "warn",
+  primary: "accent",
+  secondary: "muted",
   completed: "good",
   resolved: "good",
   closed: "good",
@@ -39,6 +46,13 @@ const TONE_MAP = {
   inside: "good",
   outside: "crit",
   "not checked": "muted",
+  // Complaint/claim priority - a distinct ramp from the status vocabulary
+  // above, since a pill showing priority sits right next to a status pill
+  // on the same card and needs its own visually escalating scale.
+  low: "muted",
+  medium: "accent",
+  high: "warn",
+  urgent: "crit",
 }
 
 const label = computed(() => props.status || "—")

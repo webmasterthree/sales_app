@@ -16,23 +16,39 @@ export default defineConfig({
     frappeui(),
     VitePWA({
       registerType: "autoUpdate",
-      strategies: "generateSW",
-      workbox: { globPatterns: ["**/*.{js,css,html,ico,png,svg}"] },
-      devOptions: { enabled: true },
-      manifest: {
-        display: "standalone",
-        name: "Field Sales",
-        short_name: "Field Sales",
-        start_url: "/field_sales_app",
-        description: "Field sales, beat planning and customer visit management",
-        theme_color: "#8EC641",
-        background_color: "#FAFAFB",
-        icons: [
-          { src: "/assets/field_sales/manifest/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-          { src: "/assets/field_sales/manifest/icon-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
-          { src: "/assets/field_sales/manifest/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-          { src: "/assets/field_sales/manifest/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-        ],
+      // injectManifest (not generateSW) because push notifications need a
+      // service worker that also runs Firebase Messaging's own
+      // onBackgroundMessage handler (public/sw.js) - generateSW only ever
+      // produces a plain Workbox precache worker with no room for that.
+      // injectRegister: null because main.js registers the worker itself
+      // (it needs the fetched Firebase config appended to the SW's own
+      // URL), not the plugin's auto-injected registration snippet.
+      strategies: "injectManifest",
+      injectRegister: null,
+      // devOptions.enabled stays off for the same reason it was turned off
+      // under generateSW: running the build step inside the dev server hit
+      // a real crash there (dynamic require of a CJS package from an ESM
+      // context) - production's `bench build` uses a different, working
+      // code path, so this only ever cost local `yarn dev`, never a deploy.
+      devOptions: { enabled: false },
+      // The web app manifest is served dynamically instead (api/branding.py's
+      // manifest(), linked directly from index.html) so a name/icon changed
+      // in the Field Sales Branding doctype reaches "Add to Home Screen"
+      // without a rebuild - manifest: false stops this plugin from also
+      // generating its own static manifest.webmanifest and injecting a
+      // second, conflicting <link rel="manifest"> tag.
+      manifest: false,
+      // Workbox's precache manifest lists every asset as a URL *relative to
+      // the service worker script's own location* ("assets/xyz.js", no
+      // leading slash) - fine as long as the SW is served from where it's
+      // built (/assets/field_sales/frontend/sw.js), but that location's
+      // default scope never covers /field_sales_app, which is why the app
+      // could never actually be installed (see api/service_worker.py,
+      // which re-serves this exact file from a URL with scope "/" instead).
+      // Rewriting every entry to an absolute path here means precaching
+      // still resolves correctly no matter which URL the SW is served from.
+      injectManifest: {
+        modifyURLPrefix: { "": "/assets/field_sales/frontend/" },
       },
     }),
   ],

@@ -1,0 +1,61 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-09-07 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "app_name",
+  "app_description",
+  "app_icon"
+ ],
+ "fields": [
+  {
+   "default": "Field Sales",
+   "description": "Shown as the browser tab title, and as the app name when a rep adds this to their home screen.",
+   "fieldname": "app_name",
+   "fieldtype": "Data",
+   "label": "App Name",
+   "reqd": 1
+  },
+  {
+   "description": "A short description of the app, used in the install prompt's own details and by some browsers' \"Add to Home Screen\" preview. Leave blank to use a generic default.",
+   "fieldname": "app_description",
+   "fieldtype": "Small Text",
+   "label": "App Description"
+  },
+  {
+   "description": "A square image (PNG or JPG), at least 512x512, on a solid (non-transparent) background - used for the home-screen icon, browser tab favicon, and push notification icon. Leave blank to use the default Field Sales icon.",
+   "fieldname": "app_icon",
+   "fieldtype": "Attach Image",
+   "label": "App Icon"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-09-07 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Field Sales",
+ "name": "Field Sales Branding",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

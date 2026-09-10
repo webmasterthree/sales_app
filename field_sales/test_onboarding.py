@@ -60,6 +60,7 @@ class TestCustomerOnboarding(FrappeTestCase):
         frappe.db.rollback()
 
     def _cleanup(self):
+        frappe.db.sql("delete from `tabNotification Log` where document_type = %s", ("Customer Onboarding",))
         for name in frappe.get_all("Customer Onboarding", pluck="name"):
             doc = frappe.get_doc("Customer Onboarding", name)
             if doc.docstatus == 1:
@@ -145,6 +146,56 @@ class TestCustomerOnboarding(FrappeTestCase):
         self.assertNotEqual(doc.territory, "All Territories")
         self.assertEqual(doc.territory, TERRITORY)
 
+    # ------------------------------------------------------------ notifications
+
+    def _with_manager(self, fn):
+        """Temporarily makes MANAGER the rep's reports_to Employee, so
+        notify.notify_employee_event (see customer_onboarding.py's on_submit/
+        approve_onboarding/reject_onboarding) has somewhere to route to."""
+        manager_emp = frappe.db.get_value("Employee", {"user_id": MANAGER}, "name")
+        original = frappe.db.get_value("Employee", self.employee, "reports_to")
+        frappe.db.set_value("Employee", self.employee, "reports_to", manager_emp)
+        try:
+            fn()
+        finally:
+            frappe.db.set_value("Employee", self.employee, "reports_to", original)
+
+    def _notification_exists(self, for_user, name):
+        return bool(frappe.db.exists("Notification Log", {
+            "for_user": for_user, "document_type": "Customer Onboarding", "document_name": name,
+        }))
+
+    def test_submit_notifies_the_reps_manager(self):
+        def run():
+            name = self._submitted()
+            self.assertTrue(self._notification_exists(MANAGER, name))
+
+        self._with_manager(run)
+
+    def test_approve_notifies_the_rep(self):
+        def run():
+            name = self._submitted()
+            frappe.set_user(MANAGER)
+            try:
+                approve_onboarding(name)
+            finally:
+                frappe.set_user("Administrator")
+            self.assertTrue(self._notification_exists(REP, name))
+
+        self._with_manager(run)
+
+    def test_reject_notifies_the_rep(self):
+        def run():
+            name = self._submitted()
+            frappe.set_user(MANAGER)
+            try:
+                reject_onboarding(name, "Missing documents")
+            finally:
+                frappe.set_user("Administrator")
+            self.assertTrue(self._notification_exists(REP, name))
+
+        self._with_manager(run)
+
     def test_a_group_customer_group_is_not_carried_onto_the_customer(self):
         name = self._submitted(customer_group="All Customer Groups")
         frappe.set_user(MANAGER)
@@ -168,6 +219,62 @@ class TestCustomerOnboarding(FrappeTestCase):
     def test_credit_terms_require_a_period(self):
         with self.assertRaises(frappe.ValidationError):
             self._draft(**{"proposed_credit": "Credit"})
+
+    # ------------------------------------------------------------ duplicates
+
+    def test_a_second_pending_request_for_the_same_contact_is_refused(self):
+        self._draft()
+        with self.assertRaises(frappe.ValidationError):
+            self._draft(customer_name="FS Onboard Test Bakery 2")
+
+    def test_a_second_request_for_the_same_gstin_is_refused_even_with_a_different_phone(self):
+        self._draft()
+        with self.assertRaises(frappe.ValidationError):
+            self._draft(contact_number="9830011111")
+
+    def test_a_different_contact_and_gstin_is_not_a_duplicate(self):
+        self._draft()
+        # no exception
+        self._draft(contact_number="9830011111", gstin="19ZZZZZ9999F1ZY")
+
+    def test_a_rejected_request_does_not_block_a_refiled_one(self):
+        """Rejection means that specific request was refused, not that the
+        outlet can never be onboarded - the rep must be able to try again."""
+        name = self._submitted()
+        frappe.set_user(MANAGER)
+        try:
+            reject_onboarding(name, remarks="Missing documents")
+        finally:
+            frappe.set_user("Administrator")
+        # no exception
+        self._draft(customer_name="FS Onboard Test Bakery Retry")
+
+    def test_a_cancelled_request_does_not_block_a_refiled_one(self):
+        name = self._submitted()
+        frappe.get_doc("Customer Onboarding", name).cancel()
+        # no exception
+        self._draft(customer_name="FS Onboard Test Bakery Again")
+
+    def test_an_approved_request_still_counts_as_a_duplicate(self):
+        """An approved KYC already has a live Customer - filing a fresh one
+        for the same outlet is a mistake to surface immediately, not a
+        second, orphaned Customer to create silently."""
+        name = self._submitted()
+        frappe.set_user(MANAGER)
+        try:
+            approve_onboarding(name)
+        finally:
+            frappe.set_user("Administrator")
+        with self.assertRaises(frappe.ValidationError):
+            self._draft(customer_name="FS Onboard Test Bakery Repeat")
+
+    def test_editing_a_draft_in_place_is_not_its_own_duplicate(self):
+        """Saving the same document again must not trip over itself."""
+        result = self._draft()
+        doc = frappe.get_doc("Customer Onboarding", result["name"])
+        doc.decision_remarks = None  # no-op change, just forces another save
+        doc.flags.ignore_permissions = True
+        doc.save()  # no exception
 
     def test_client_cannot_set_status_or_customer_directly(self):
         frappe.set_user(REP)
@@ -295,7 +402,17 @@ class TestCustomerOnboarding(FrappeTestCase):
 
     def test_list_tabs(self):
         pending = self._submitted()
-        approved_name = self._submitted(customer_name="FS Onboard Test Approved")
+        # Different contact_number AND gstin (a second, distinct, checksum-
+        # valid GSTIN - approve_onboarding below builds a real Customer,
+        # which india_compliance validates the checksum of) - these are
+        # meant to be two distinct outlets for this test's purpose, and
+        # validate_duplicate now blocks a second onboarding that shares
+        # either identifier with an existing, still-active request.
+        approved_name = self._submitted(
+            customer_name="FS Onboard Test Approved",
+            contact_number="9830099998",
+            gstin="19ZZZZZ0000F1ZS",
+        )
         frappe.set_user(MANAGER)
         try:
             approve_onboarding(approved_name)

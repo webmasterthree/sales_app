@@ -19,6 +19,13 @@
   "customer_group",
   "sec_contact",
   "location",
+  "address_line1",
+  "address_line2",
+  "city",
+  "cb_address",
+  "district",
+  "state",
+  "pincode",
   "contact_person",
   "contact_number",
   "cb_contact",
@@ -113,11 +120,51 @@
    "label": "Location & Contact"
   },
   {
+   "description": "Optional. Only needed when the outlet's address record already exists - otherwise fill in the fields below and a new Address is created on approval.",
    "fieldname": "location",
    "fieldtype": "Link",
-   "label": "Address",
-   "options": "Address",
-   "reqd": 1
+   "label": "Existing Address (optional)",
+   "options": "Address"
+  },
+  {
+   "fetch_from": "location.address_line1",
+   "fieldname": "address_line1",
+   "fieldtype": "Data",
+   "label": "Address Line 1"
+  },
+  {
+   "fetch_from": "location.address_line2",
+   "fieldname": "address_line2",
+   "fieldtype": "Data",
+   "label": "Address Line 2"
+  },
+  {
+   "fetch_from": "location.city",
+   "fieldname": "city",
+   "fieldtype": "Data",
+   "label": "City"
+  },
+  {
+   "fieldname": "cb_address",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "location.district",
+   "fieldname": "district",
+   "fieldtype": "Data",
+   "label": "District"
+  },
+  {
+   "fetch_from": "location.state",
+   "fieldname": "state",
+   "fieldtype": "Data",
+   "label": "State"
+  },
+  {
+   "fetch_from": "location.pincode",
+   "fieldname": "pincode",
+   "fieldtype": "Data",
+   "label": "Pincode"
   },
   {
    "fieldname": "contact_person",

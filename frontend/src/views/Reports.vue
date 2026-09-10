@@ -26,6 +26,36 @@
         </div>
       </RouterLink>
 
+      <RouterLink
+        :to="{ name: 'Performance' }"
+        class="block bg-surface rounded-2xl border border-rule p-4 active:opacity-80"
+      >
+        <div class="flex items-center gap-3">
+          <span class="w-10 h-10 rounded-full bg-accent-soft text-accent-ink flex items-center justify-center shrink-0">
+            <Icon name="bar-chart" :size="18" />
+          </span>
+          <div class="min-w-0">
+            <p class="font-display font-semibold text-ink">Team Performance</p>
+            <p class="text-xs text-ink-2">How you rank on visits and orders this month</p>
+          </div>
+        </div>
+      </RouterLink>
+
+      <RouterLink
+        :to="{ name: 'JourneyPlanVisitReport' }"
+        class="block bg-surface rounded-2xl border border-rule p-4 active:opacity-80"
+      >
+        <div class="flex items-center gap-3">
+          <span class="w-10 h-10 rounded-full bg-accent-soft text-accent-ink flex items-center justify-center shrink-0">
+            <Icon name="journey" :size="18" />
+          </span>
+          <div class="min-w-0">
+            <p class="font-display font-semibold text-ink">Visit Report</p>
+            <p class="text-xs text-ink-2">Journey plans vs. actual field visits, with geolocation</p>
+          </div>
+        </div>
+      </RouterLink>
+
       <div
         v-for="tile in unavailableTiles"
         :key="tile.title"

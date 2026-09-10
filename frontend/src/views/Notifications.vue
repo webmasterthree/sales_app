@@ -54,11 +54,28 @@
 <script setup>
 import { onMounted, ref } from "vue"
 import { call } from "frappe-ui"
+import { useRouter } from "vue-router"
 import EmptyState from "@/components/EmptyState.vue"
 import ErrorState from "@/components/ErrorState.vue"
 import LoadingSkeleton from "@/components/LoadingSkeleton.vue"
 import { refreshUnreadCount } from "@/data/notifications"
 
+// Where a notification's document_type routes to, matching the `name`s
+// declared in router/index.js. A doctype not listed here (or a document
+// that's since been deleted) falls back to marking the notification read
+// with no navigation, rather than throwing.
+const DETAIL_ROUTES = {
+  "Field Visit": "VisitDetail",
+  "Customer Onboarding": "OnboardingDetail",
+  "Product Demo": "DemoDetail",
+  "Sample Request": "SampleRequestDetail",
+  "Collateral Request": "CollateralRequestDetail",
+  "Issue": "ComplaintDetail",
+  "Sales Order": "OrderDetail",
+  "Customer": "CustomerDetail",
+}
+
+const router = useRouter()
 const records = ref([])
 const loading = ref(true)
 const error = ref("")
@@ -83,14 +100,26 @@ function setTab(t) {
 }
 
 async function markRead(n) {
-  if (n.read) return
-  try {
-    await call("field_sales.api.home.mark_notification_read", { name: n.name })
-    n.read = 1
-    refreshUnreadCount()
-  } catch (err) {
-    error.value = err.messages?.[0] || err.message
+  if (!n.read) {
+    try {
+      await call("field_sales.api.home.mark_notification_read", { name: n.name })
+      n.read = 1
+      refreshUnreadCount()
+    } catch (err) {
+      error.value = err.messages?.[0] || err.message
+    }
   }
+  navigateToRecord(n)
+}
+
+// Route to the notification's own record, when this app has a detail view
+// for its doctype. A notification about something this app doesn't render
+// (or whose document has since been deleted) just stays here, marked read -
+// no route, no error.
+function navigateToRecord(n) {
+  const routeName = DETAIL_ROUTES[n.document_type]
+  if (!routeName || !n.document_name) return
+  router.push({ name: routeName, params: { name: n.document_name } })
 }
 
 async function markAll() {

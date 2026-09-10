@@ -35,7 +35,7 @@ class TestFieldVisit(FrappeTestCase):
         cls.reason = ensure("Field Reason", "FS Test Not Interested", {
             "reason": "FS Test Not Interested", "applies_to": "Visit",
         })
-        cls.segment = ensure("Application Segment", "FS Test Bakery", {
+        cls.segment = ensure("Segment", "FS Test Bakery", {
             "segment_name": "FS Test Bakery",
         })
         cls.company = frappe.get_all("Company", pluck="name")[0]
@@ -174,9 +174,9 @@ class TestFieldVisit(FrappeTestCase):
     def test_cannot_check_in_twice(self):
         doc = self._visit()
         doc.insert(ignore_permissions=True)
-        check_in(doc.name)
+        check_in(doc.name, latitude=22.5726, longitude=88.3639)
         with self.assertRaises(frappe.ValidationError):
-            check_in(doc.name)
+            check_in(doc.name, latitude=22.5726, longitude=88.3639)
 
     def test_cannot_check_out_before_checking_in(self):
         doc = self._visit()
@@ -256,7 +256,7 @@ class TestFieldVisit(FrappeTestCase):
         # a visit can only be submitted once it has been checked in and out
         submitted = self._visit()
         submitted.insert(ignore_permissions=True)
-        check_in(submitted.name)
+        check_in(submitted.name, latitude=22.5726, longitude=88.3639)
         check_out(submitted.name)
         submitted.reload()
         submitted.submit()

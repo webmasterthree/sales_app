@@ -22,6 +22,7 @@ const config = {
   ],
   cardTitle: (row) => row.subject || row.name,
   cardSubtitle: (row) => row.customer || "",
+  cardBadge: (row) => (row.priority ? { status: row.priority } : null),
   cardMeta: (row) => row.opening_date,
   createRouteName: "ComplaintNew",
   detailRouteName: "ComplaintDetail",

@@ -30,7 +30,13 @@
             class="w-full rounded-xl border border-rule bg-surface px-3 py-2 text-sm"
             placeholder="Document number (optional)"
           />
-          <FileUpload v-model="row.attachment" doctype="Customer Onboarding" accept="image/*,.pdf" label="Photograph or scan the document" />
+          <FileUpload
+            v-model="row.attachment"
+            doctype="Customer Onboarding"
+            accept="image/*,.pdf"
+            label="Photograph or scan the document"
+            @uploading-change="uploadingByIndex[i] = $event"
+          />
         </div>
 
         <button
@@ -46,6 +52,7 @@
 </template>
 
 <script setup>
+import { reactive } from "vue"
 import { useRouter } from "vue-router"
 import { call } from "frappe-ui"
 import FormView from "@/components/FormView.vue"
@@ -56,6 +63,11 @@ const documentTypes = ["GST Certificate", "PAN Card", "Shop License", "FSSAI Reg
 
 const router = useRouter()
 
+// Keyed by document row index - the "Documents" step can submit is only
+// safe once every row's own upload (if any) has actually finished. See
+// FileUpload.vue's uploading-change comment for why this matters.
+const uploadingByIndex = reactive({})
+
 const initialData = {
   customer_name: "",
   business_type: "Registered",
@@ -65,6 +77,12 @@ const initialData = {
   market_segment: "",
   customer_group: "",
   location: "",
+  address_line1: "",
+  address_line2: "",
+  city: "",
+  district: "",
+  state: "",
+  pincode: "",
   contact_person: "",
   contact_number: "",
   territory: "",
@@ -90,13 +108,26 @@ const steps = [
     ],
   },
   {
-    title: "Contact",
+    title: "Address & contact",
     fields: [
-      { key: "location", label: "Address (Address record name)", type: "text", required: true },
+      { key: "location", label: "Existing address (Address record name, optional)", type: "text" },
+      { key: "address_line1", label: "Address line 1 (required unless an existing address is picked above)", type: "text" },
+      { key: "address_line2", label: "Address line 2", type: "text" },
+      { key: "city", label: "City (required unless an existing address is picked above)", type: "text" },
+      { key: "district", label: "District", type: "text" },
+      { key: "state", label: "State (required unless an existing address is picked above)", type: "text" },
+      { key: "pincode", label: "Pincode (required unless an existing address is picked above)", type: "text" },
       { key: "contact_person", label: "Contact person", type: "text" },
       { key: "contact_number", label: "Contact number", type: "text", required: true },
       { key: "territory", label: "Territory", type: "text", required: true },
     ],
+    validate: (d) => {
+      if (d.location) return ""
+      if (!(d.address_line1 && d.city && d.state && d.pincode)) {
+        return "Give the outlet's address: either pick an existing Address, or fill in address line 1, city, state and pincode."
+      }
+      return ""
+    },
   },
   {
     title: "Credit terms",
@@ -109,6 +140,12 @@ const steps = [
   {
     title: "Documents",
     fields: [],
+    validate: () => {
+      if (Object.values(uploadingByIndex).some(Boolean)) {
+        return "A document photo is still uploading - wait a moment before submitting."
+      }
+      return ""
+    },
   },
 ]
 

@@ -92,9 +92,6 @@ def evaluate(address: str | None, latitude, longitude) -> dict:
         "message": "",
     }
 
-    if not cint(cfg.enforce_geofence):
-        return result
-
     if not is_valid_position(latitude, longitude):
         result["message"] = frappe._("No usable location fix was supplied.")
         return result

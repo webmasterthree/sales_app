@@ -6,18 +6,31 @@
       </router-view>
     </div>
     <BottomNav v-if="showBottomNav" />
-    <InstallPrompt />
+    <PushToast ref="pushToast" />
   </div>
 </template>
 
 <script setup>
-import { computed } from "vue"
+import { computed, onMounted, ref } from "vue"
 import { useRoute } from "vue-router"
 import BottomNav from "@/components/BottomNav.vue"
-import InstallPrompt from "@/components/InstallPrompt.vue"
+import PushToast from "@/components/PushToast.vue"
 
 const TAB_ROUTES = ["Home", "Performance", "Notifications", "Profile"]
 
 const route = useRoute()
 const showBottomNav = computed(() => TAB_ROUTES.includes(route.name))
+
+const pushToast = ref(null)
+
+// A push notification that arrives while the app is actually open never
+// reaches the service worker's own background handler (that's the whole
+// point of "foreground" vs "background") - FrappePushNotification's own
+// onMessage is the one hook for showing something here instead of the
+// message silently landing nowhere.
+onMounted(() => {
+  window?.frappePushNotification?.onMessage((payload) => {
+    pushToast.value?.push(payload?.data)
+  })
+})
 </script>

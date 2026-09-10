@@ -123,9 +123,34 @@ def session_payload(user: str) -> dict:
         or frappe._dict()
     )
 
+    user_fields = frappe.db.get_value(
+        "User",
+        user,
+        [
+            "full_name",
+            "first_name",
+            "last_name",
+            "phone",
+            "mobile_no",
+            "location",
+            "mute_sounds",
+            "thread_notify",
+            "send_me_a_copy",
+        ],
+        as_dict=True,
+    ) or frappe._dict()
+
     return {
         "user": user,
-        "full_name": frappe.db.get_value("User", user, "full_name"),
+        "full_name": user_fields.get("full_name"),
+        "first_name": user_fields.get("first_name"),
+        "last_name": user_fields.get("last_name"),
+        "phone": user_fields.get("phone"),
+        "mobile_no": user_fields.get("mobile_no"),
+        "location": user_fields.get("location"),
+        "mute_sounds": user_fields.get("mute_sounds"),
+        "thread_notify": user_fields.get("thread_notify"),
+        "send_me_a_copy": user_fields.get("send_me_a_copy"),
         "employee": employee.get("name"),
         "employee_name": employee.get("employee_name"),
         "designation": employee.get("designation"),
@@ -147,6 +172,47 @@ def session() -> dict:
     """
     if frappe.session.user == "Guest":
         raise frappe.AuthenticationError(_("Not signed in"))
+    return session_payload(frappe.session.user)
+
+
+# ---------------------------------------------------------------- profile
+#
+# A rep's own User record carries plenty of fields that are permission
+# relevant - roles, User Permissions, email/username, module blocks. This
+# endpoint is deliberately narrow: it can only ever touch `frappe.session.user`
+# (never a name passed in by the caller), and only the fields on the
+# allow-list below. A normal "Sales Executive App" user has no write grant on
+# the User doctype at all (see user.json), which is correct everywhere else -
+# so this uses `ignore_permissions` on purpose, the same way core Frappe's own
+# self-service settings (e.g. switching desk theme) update the caller's own
+# User record without a doctype-level write permission.
+WRITABLE_PROFILE_FIELDS = {
+    "first_name",
+    "last_name",
+    "phone",
+    "mobile_no",
+    "location",
+    "mute_sounds",
+    "thread_notify",
+    "send_me_a_copy",
+}
+
+
+@frappe.whitelist(methods=["POST"])
+def update_profile(**payload) -> dict:
+    """Update genuinely self-service fields on the caller's own User record."""
+    if frappe.session.user == "Guest":
+        raise frappe.AuthenticationError(_("Not signed in"))
+
+    if isinstance(payload.get("payload"), str):
+        payload = frappe.parse_json(payload["payload"])
+
+    doc = frappe.get_doc("User", frappe.session.user)
+    for key, value in (payload or {}).items():
+        if key in WRITABLE_PROFILE_FIELDS:
+            doc.set(key, value)
+    doc.save(ignore_permissions=True)
+
     return session_payload(frappe.session.user)
 
 

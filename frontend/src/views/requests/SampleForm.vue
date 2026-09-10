@@ -8,8 +8,46 @@
     :on-submit="createRequest"
     @saved="onSaved"
   >
-    <template #step-0="{ data }">
+    <template #step-0="{ data, errors }">
       <div class="space-y-4">
+        <!-- Who the sample is for - the request write path (REQUEST_WRITABLE_FIELDS)
+             already accepted party_type/customer/prospect_name, but this form
+             never collected or sent them, so every request saved with a blank
+             customer regardless of what the Detail page showed for older,
+             directly-inserted records. -->
+        <div class="bg-surface rounded-2xl p-4 space-y-3">
+          <div>
+            <label class="block text-sm font-display text-ink-2 mb-1">Who is this for? <span class="text-crit">*</span></label>
+            <div class="flex gap-2">
+              <button
+                v-for="opt in ['Customer', 'Prospect']"
+                :key="opt"
+                type="button"
+                class="flex-1 py-2 rounded-[10px] text-sm font-display border"
+                :class="data.party_type === opt ? 'bg-accent text-accent-fg border-accent' : 'bg-surface border-rule text-ink-2'"
+                @click="data.party_type = opt"
+              >
+                {{ opt }}
+              </button>
+            </div>
+          </div>
+          <CustomerPicker
+            v-if="data.party_type === 'Customer'"
+            label="Customer *"
+            :multiple="false"
+            :model-value="data.customer"
+            @update:model-value="data.customer = $event"
+          />
+          <div v-else>
+            <label class="block text-sm font-display text-ink-2 mb-1">Prospect name <span class="text-crit">*</span></label>
+            <input
+              v-model="data.prospect_name"
+              class="w-full h-[44px] rounded-[10px] border border-rule bg-surface px-3 text-sm"
+              :class="errors.prospect_name ? 'border-crit' : ''"
+            />
+          </div>
+        </div>
+
         <div class="bg-surface rounded-2xl p-4 space-y-3">
           <div class="flex items-center justify-between">
             <label class="text-sm font-display text-ink-2">Selected items <span class="text-crit">*</span></label>
@@ -66,11 +104,15 @@ import { ref } from "vue"
 import { useRouter } from "vue-router"
 import { call } from "frappe-ui"
 import FormView from "@/components/FormView.vue"
+import CustomerPicker from "@/components/CustomerPicker.vue"
 import { queueWrite } from "@/composables/offlineQueue"
 
 const router = useRouter()
 
 const initialData = {
+  party_type: "Customer",
+  customer: "",
+  prospect_name: "",
   required_by: "",
   purpose: "",
   items: [], // {item_code, item_name, qty}
@@ -108,6 +150,8 @@ const steps = [
     title: "Sample request",
     fields: [],
     validate: (d) => {
+      if (d.party_type === "Customer" && !d.customer) return "Select the customer this sample is for."
+      if (d.party_type === "Prospect" && !d.prospect_name) return "Enter a name for the prospect this sample is for."
       if (!d.items.length) return "Add at least one item."
       if (d.items.some((r) => !r.qty)) return "Every item needs a quantity."
       if (!d.required_by) return "Give the date you need the sample by."
@@ -118,15 +162,26 @@ const steps = [
 
 async function createRequest(data) {
   const args = {
+    party_type: data.party_type,
+    customer: data.party_type === "Customer" ? data.customer : undefined,
+    prospect_name: data.party_type === "Prospect" ? data.prospect_name : undefined,
     required_by: data.required_by,
     purpose: data.purpose || undefined,
     items: data.items.map((r) => ({ item_code: r.item_code, qty: r.qty })),
   }
-  return queueWrite({
+  const created = await queueWrite({
     method: "field_sales.api.requests.create_sample_request",
     args,
     label: "New sample request",
   })
+  // The button says "Submit request", not "Save draft" - FormView has no
+  // allow-draft here, so this is the only action available, and it should
+  // do what it says: file the request, then immediately submit it so it
+  // actually reaches docstatus 1 instead of sitting as a draft forever.
+  if (!created.queued && created?.name) {
+    await call("field_sales.api.requests.submit_sample_request", { name: created.name })
+  }
+  return created
 }
 
 function onSaved(result) {

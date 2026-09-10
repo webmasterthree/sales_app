@@ -11,6 +11,8 @@ export const ICONS = {
   kyc: "kyc",
   price: "price",
   requisitions: "requisitions",
+  journey: "journey",
+  trial: "trial",
   sample: "sample",
   collateral: "collateral",
   demo: "demo",

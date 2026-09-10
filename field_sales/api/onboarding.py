@@ -65,9 +65,10 @@ def onboarding(name: str):
 # decision_remarks are set exclusively by approve_onboarding/reject_onboarding.
 WRITABLE = {
     "customer_name", "business_type", "gst_category", "gstin", "pan",
-    "market_segment", "customer_group", "location", "contact_person",
-    "contact_number", "territory", "field_visit", "proposed_credit",
-    "credit_days", "credit_limit",
+    "market_segment", "customer_group", "location",
+    "address_line1", "address_line2", "city", "district", "state", "pincode",
+    "contact_person", "contact_number", "territory", "field_visit",
+    "proposed_credit", "credit_days", "credit_limit",
 }
 WRITABLE_TABLES = {"documents": {"document_type", "attachment", "number", "remarks"}}
 

@@ -26,15 +26,32 @@
         <div
           v-for="row in doc.items || []"
           :key="row.item_code + row.idx"
-          class="flex items-center justify-between gap-3 py-2.5 border-b border-rule-soft text-sm"
+          class="py-2.5 border-b border-rule-soft text-sm"
         >
-          <span class="text-ink">{{ row.item_code }} × {{ row.qty }}</span>
-          <span class="font-display font-medium text-ink">₹{{ lineTotal(row) }}</span>
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-ink">{{ row.item_code }} × {{ row.qty }}</span>
+            <span class="font-display font-medium text-ink">₹{{ lineTotal(row) }}</span>
+          </div>
+          <p v-if="appliedRules(row).length" class="text-xs text-accent-ink mt-0.5">
+            Scheme applied: {{ appliedRules(row).map((r) => r.title).join(", ") }}
+          </p>
         </div>
-        <div class="flex items-center justify-between gap-3 py-3">
+        <div class="flex items-center justify-between gap-3 py-2 border-t border-rule-soft text-sm">
+          <span class="text-ink-2">Subtotal</span>
+          <span class="text-ink">₹{{ flt2(doc.total) }}</span>
+        </div>
+        <div v-for="tax in doc.taxes || []" :key="tax.name" class="flex items-center justify-between gap-3 py-1 text-sm">
+          <span class="text-ink-2">{{ tax.description || tax.account_head }}{{ tax.rate ? ` (${tax.rate}%)` : "" }}</span>
+          <span class="text-ink">₹{{ flt2(tax.tax_amount) }}</span>
+        </div>
+        <div class="flex items-center justify-between gap-3 py-3 border-t border-rule-soft">
           <span class="font-display font-extrabold text-ink">Grand Total</span>
-          <span class="font-display font-extrabold text-ink">₹{{ doc.grand_total }}</span>
+          <span class="font-display font-extrabold text-ink">₹{{ flt2(doc.grand_total) }}</span>
         </div>
+      </div>
+
+      <div v-if="!doc.total_taxes_and_charges" class="bg-warn/10 text-warn text-xs rounded-xl p-3">
+        No GST has been calculated on this order.
       </div>
 
       <div class="bg-surface border border-rule rounded-xl p-3">
@@ -62,7 +79,15 @@
         <p class="font-display font-bold text-xs text-ink-2 mb-1">Customer Information</p>
         <p class="text-sm text-ink font-medium">{{ doc.customer_name || doc.customer }}</p>
         <p class="text-xs text-ink-2">{{ doc.contact_display || doc.contact_mobile || "—" }} · {{ doc.territory || "—" }}</p>
+        <p v-if="doc.customer_level" class="text-xs text-ink-2 mt-1">
+          {{ doc.customer_level }}
+          <template v-if="doc.customer_level === 'Secondary'">
+            · via {{ doc.cp_name || doc.custom_channel_partner }}
+          </template>
+        </p>
       </div>
+
+      <CommentThread doctype="Sales Order" :docname="doc.name" />
     </div>
 
     <div v-if="doc && doc.docstatus === 0" class="fixed bottom-0 inset-x-0 bg-surface border-t border-rule px-4 py-3 pb-safe z-30">
@@ -88,6 +113,7 @@ import StatusPill from "@/components/StatusPill.vue"
 import ErrorState from "@/components/ErrorState.vue"
 import LoadingSkeleton from "@/components/LoadingSkeleton.vue"
 import Icon from "@/components/Icon.vue"
+import CommentThread from "@/components/CommentThread.vue"
 
 const props = defineProps({ name: { type: String, required: true } })
 const router = useRouter()
@@ -99,6 +125,23 @@ const busy = ref(false)
 
 function lineTotal(row) {
   return ((row.rate || 0) * (row.qty || 0)).toFixed(2)
+}
+
+function flt2(v) {
+  return (v || 0).toFixed(2)
+}
+
+// enforce_sales_order_rates (field_sales.pricing) already stamps every line
+// with which Pricing Rules fired, as a JSON string in a field the client
+// can never write to - this just surfaces it, rather than leaving a rep to
+// wonder why a rate looks the way it does.
+function appliedRules(row) {
+  if (!row.custom_pricing_rules_applied) return []
+  try {
+    return JSON.parse(row.custom_pricing_rules_applied) || []
+  } catch {
+    return []
+  }
 }
 
 async function load() {
