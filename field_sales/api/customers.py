@@ -233,16 +233,111 @@ def _mode_of_payment_account(mode_of_payment: str, company: str) -> str:
     return account
 
 
+def _build_payment_entry(
+    customer: str,
+    employee: str,
+    mode_of_payment: str,
+    reference_no: str | None,
+    group_amounts: dict,
+    found: dict,
+):
+    """One submitted Payment Entry for a single reference number (or none,
+    e.g. Cash) - allocated across whichever invoices in ``group_amounts``
+    share that reference, splitting across Payment Schedule terms within an
+    invoice where payment-term-based allocation is enabled."""
+    from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+
+    names = list(group_amounts.keys())
+    total_amount = flt(sum(group_amounts.values()), 2)
+
+    pe = get_payment_entry("Sales Invoice", names[0], party_amount=total_amount)
+    pe.mode_of_payment = mode_of_payment
+    pe.paid_to = _mode_of_payment_account(mode_of_payment, pe.company)
+    pe.reference_no = reference_no or f"Field collection - {employee}"
+    pe.reference_date = nowdate()
+    pe.paid_amount = total_amount
+    pe.received_amount = total_amount
+    if pe.meta.has_field("created_by_emp"):
+        pe.created_by_emp = employee
+
+    # Payment Entry has no field of its own for "who recorded this and
+    # through what channel" - reusing reference_no for that would break
+    # the moment a rep enters a real cheque/UTR number. A fixed marker in
+    # remarks is what collections_history() below greps for to tell a
+    # field collection apart from a desk-entered Payment Entry, without
+    # adding a new custom field just to carry one flag.
+    marker = f"Recorded via field_sales app by {employee}."
+    pe.remarks = f"{pe.remarks}\n{marker}" if pe.remarks else marker
+
+    schedules_by_invoice: dict[str, list] = {}
+    for row in frappe.get_all(
+        "Payment Schedule",
+        filters={"parent": ["in", names], "outstanding": [">", 0]},
+        fields=["parent", "payment_term", "due_date", "payment_amount", "outstanding"],
+        order_by="parent, due_date asc",
+    ):
+        schedules_by_invoice.setdefault(row.parent, []).append(row)
+
+    pe.set("references", [])
+    for name in names:
+        inv = found[name]
+        invoice_remaining = group_amounts[name]
+        schedule = schedules_by_invoice.get(name)
+        if not schedule:
+            # No payment-term split on this invoice - one reference row
+            # against the whole thing.
+            pe.append(
+                "references",
+                {
+                    "reference_doctype": "Sales Invoice",
+                    "reference_name": name,
+                    "due_date": inv.due_date,
+                    "total_amount": inv.outstanding_amount,
+                    "outstanding_amount": inv.outstanding_amount,
+                    "allocated_amount": invoice_remaining,
+                },
+            )
+            continue
+
+        # This invoice has "Payment Term based allocation" enabled -
+        # ERPNext requires a payment_term on every reference row in that
+        # case, and refuses an allocation that doesn't respect each term's
+        # own outstanding. Walk the schedule oldest-due-first, bounded to
+        # what the rep entered for this invoice.
+        for term in schedule:
+            if invoice_remaining <= 0.01:
+                break
+            alloc = min(flt(term.outstanding), invoice_remaining)
+            pe.append(
+                "references",
+                {
+                    "reference_doctype": "Sales Invoice",
+                    "reference_name": name,
+                    "payment_term": term.payment_term,
+                    "due_date": term.due_date,
+                    "total_amount": term.payment_amount,
+                    "outstanding_amount": term.outstanding,
+                    "allocated_amount": alloc,
+                },
+            )
+            invoice_remaining -= alloc
+
+    pe.insert()
+    pe.submit()
+    return pe
+
+
 @frappe.whitelist()
 def record_collection(
     customer: str,
     invoice_amounts: str | dict,
     mode_of_payment: str,
+    invoice_references: str | dict | None = None,
     reference_no: str | None = None,
 ) -> dict:
     """Record a payment collected from a customer in the field.
 
-    Creates a real, submitted Payment Entry - the same document type the
+    Creates real, submitted Payment Entries - the same document type the
     desk side and every ledger/report already reads - rather than a
     parallel "collection" record only this app would understand.
 
@@ -250,9 +345,15 @@ def record_collection(
     picks which invoices and how much against each (a partial amount on one
     invoice, the full outstanding on another), rather than this function
     guessing an oldest-due-first split from a single total.
-    """
-    from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 
+    ``invoice_references`` is an optional ``{invoice_name: reference_no}`` -
+    a rep collecting against several invoices in one visit may be handed a
+    different cheque or UTR for each. A Payment Entry only ever carries one
+    reference number, so invoices are grouped by their reference (falling
+    back to the plain ``reference_no`` argument, then to nothing for Cash)
+    and one Payment Entry is created per group - never one document with a
+    reference number that only applies to some of its lines.
+    """
     if not frappe.has_permission("Customer", "read", doc=customer):
         raise frappe.PermissionError
 
@@ -267,9 +368,11 @@ def record_collection(
     if not invoice_amounts:
         frappe.throw(frappe._("Select at least one invoice and enter an amount."))
 
+    if isinstance(invoice_references, str):
+        invoice_references = frappe.parse_json(invoice_references)
+    invoice_references = invoice_references or {}
+
     mop_type = frappe.db.get_value("Mode of Payment", mode_of_payment, "type")
-    if mop_type != "Cash" and not (reference_no and reference_no.strip()):
-        frappe.throw(frappe._("Enter a reference number for {0}.").format(mode_of_payment))
 
     employee = frappe.db.get_value(
         "Employee", {"user_id": frappe.session.user, "status": "Active"}, "name"
@@ -298,7 +401,13 @@ def record_collection(
                 )
             )
 
-    total_amount = flt(sum(invoice_amounts.values()), 2)
+    groups: dict[str, dict] = {}
+    for name in names:
+        ref = (invoice_references.get(name) or reference_no or "").strip()
+        groups.setdefault(ref, {})[name] = invoice_amounts[name]
+
+    if mop_type != "Cash" and not any(ref for ref in groups):
+        frappe.throw(frappe._("Enter a reference number for {0}.").format(mode_of_payment))
 
     # get_payment_entry (and Payment Entry's own validate()) read the
     # account's balance via erpnext.accounts.utils.get_balance_on, which
@@ -308,84 +417,18 @@ def record_collection(
     # account they never see or choose themselves.
     frappe.flags.ignore_account_permission = True
     try:
-        pe = get_payment_entry("Sales Invoice", names[0], party_amount=total_amount)
-        pe.mode_of_payment = mode_of_payment
-        pe.paid_to = _mode_of_payment_account(mode_of_payment, pe.company)
-        pe.reference_no = reference_no or f"Field collection - {employee}"
-        pe.reference_date = nowdate()
-        pe.paid_amount = total_amount
-        pe.received_amount = total_amount
-        if pe.meta.has_field("created_by_emp"):
-            pe.created_by_emp = employee
-
-        # Payment Entry has no field of its own for "who recorded this and
-        # through what channel" - reusing reference_no for that would break
-        # the moment a rep enters a real cheque/UTR number. A fixed marker
-        # in remarks is what collections_history() below greps for to tell
-        # a field collection apart from a desk-entered Payment Entry,
-        # without adding a new custom field just to carry one flag.
-        marker = f"Recorded via field_sales app by {employee}."
-        pe.remarks = f"{pe.remarks}\n{marker}" if pe.remarks else marker
-
-        schedules_by_invoice: dict[str, list] = {}
-        for row in frappe.get_all(
-            "Payment Schedule",
-            filters={"parent": ["in", names], "outstanding": [">", 0]},
-            fields=["parent", "payment_term", "due_date", "payment_amount", "outstanding"],
-            order_by="parent, due_date asc",
-        ):
-            schedules_by_invoice.setdefault(row.parent, []).append(row)
-
-        pe.set("references", [])
-        for name in names:
-            inv = found[name]
-            invoice_remaining = invoice_amounts[name]
-            schedule = schedules_by_invoice.get(name)
-            if not schedule:
-                # No payment-term split on this invoice - one reference row
-                # against the whole thing.
-                pe.append(
-                    "references",
-                    {
-                        "reference_doctype": "Sales Invoice",
-                        "reference_name": name,
-                        "due_date": inv.due_date,
-                        "total_amount": inv.outstanding_amount,
-                        "outstanding_amount": inv.outstanding_amount,
-                        "allocated_amount": invoice_remaining,
-                    },
-                )
-                continue
-
-            # This invoice has "Payment Term based allocation" enabled -
-            # ERPNext requires a payment_term on every reference row in that
-            # case, and refuses an allocation that doesn't respect each
-            # term's own outstanding. Walk the schedule oldest-due-first,
-            # bounded to what the rep entered for this invoice.
-            for term in schedule:
-                if invoice_remaining <= 0.01:
-                    break
-                alloc = min(flt(term.outstanding), invoice_remaining)
-                pe.append(
-                    "references",
-                    {
-                        "reference_doctype": "Sales Invoice",
-                        "reference_name": name,
-                        "payment_term": term.payment_term,
-                        "due_date": term.due_date,
-                        "total_amount": term.payment_amount,
-                        "outstanding_amount": term.outstanding,
-                        "allocated_amount": alloc,
-                    },
-                )
-                invoice_remaining -= alloc
-
-        pe.insert()
-        pe.submit()
+        entries = [
+            _build_payment_entry(customer, employee, mode_of_payment, ref or None, group_amounts, found)
+            for ref, group_amounts in groups.items()
+        ]
     finally:
         frappe.flags.ignore_account_permission = False
 
-    return {"payment_entry": pe.name, "amount": flt(pe.paid_amount, 2), "customer": customer}
+    return {
+        "payment_entries": [pe.name for pe in entries],
+        "amount": flt(sum(pe.paid_amount for pe in entries), 2),
+        "customer": customer,
+    }
 
 
 @frappe.whitelist()
@@ -441,6 +484,64 @@ def collections_history(limit: int = 50) -> list:
         r["paid_amount"] = flt(r.paid_amount, 2)
 
     return rows
+
+
+@frappe.whitelist()
+def collection_detail(name: str) -> dict:
+    """One collection's full detail - which invoices it was applied
+    against and how much of each - for tapping into a row on the
+    collections_history() list."""
+    pe = frappe.get_doc("Payment Entry", name)
+
+    if (
+        pe.payment_type != "Receive"
+        or pe.party_type != "Customer"
+        or "Recorded via field_sales app" not in (pe.remarks or "")
+    ):
+        frappe.throw(frappe._("Collection not found."))
+
+    if not scope.has_unrestricted_scope():
+        customer_territory = frappe.db.get_value("Customer", pe.party, "territory")
+        if customer_territory not in scope.effective_territories():
+            raise frappe.PermissionError
+
+    collected_by = frappe.db.get_value("Employee", {"user_id": pe.owner}, "employee_name") or pe.owner
+
+    alloc_by_invoice: dict[str, float] = {}
+    for row in pe.references:
+        if row.reference_doctype != "Sales Invoice":
+            continue
+        alloc_by_invoice[row.reference_name] = alloc_by_invoice.get(row.reference_name, 0) + flt(row.allocated_amount)
+
+    current_outstanding = {
+        inv.name: flt(inv.outstanding_amount)
+        for inv in frappe.get_all(
+            "Sales Invoice",
+            filters={"name": ["in", list(alloc_by_invoice.keys())]},
+            fields=["name", "outstanding_amount"],
+        )
+    } if alloc_by_invoice else {}
+
+    references = [
+        {
+            "invoice": invoice,
+            "allocated_amount": flt(amount, 2),
+            "outstanding_amount": current_outstanding.get(invoice, 0),
+        }
+        for invoice, amount in alloc_by_invoice.items()
+    ]
+
+    return {
+        "name": pe.name,
+        "customer": pe.party,
+        "customer_name": pe.party_name,
+        "paid_amount": flt(pe.paid_amount, 2),
+        "mode_of_payment": pe.mode_of_payment,
+        "posting_date": str(pe.posting_date),
+        "reference_no": pe.reference_no,
+        "collected_by": collected_by,
+        "references": references,
+    }
 
 
 @frappe.whitelist()

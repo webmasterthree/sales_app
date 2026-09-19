@@ -59,18 +59,32 @@
                   </p>
                 </div>
               </label>
-              <div v-if="isSelected(inv)" class="flex items-center gap-2 mt-2 pl-[26px]">
-                <span class="text-xs text-ink-3 shrink-0">₹</span>
-                <input
-                  v-model.number="invoiceAmounts[inv.name]"
-                  type="number"
-                  inputmode="decimal"
-                  min="0"
-                  :max="inv.outstanding_amount"
-                  step="0.01"
-                  class="flex-1 h-[36px] rounded-[8px] border bg-surface px-2 text-sm tabular-nums"
-                  :class="invoiceAmountError(inv) ? 'border-crit' : 'border-rule'"
-                />
+              <div v-if="isSelected(inv)" class="flex items-start gap-2 mt-2 pl-[26px]">
+                <div class="flex-1 min-w-0">
+                  <span class="block text-[10px] text-ink-3 mb-0.5">Amount</span>
+                  <input
+                    v-model.number="invoiceAmounts[inv.name]"
+                    type="number"
+                    inputmode="decimal"
+                    min="0"
+                    :max="inv.outstanding_amount"
+                    step="0.01"
+                    class="w-full h-[36px] rounded-[8px] border bg-surface px-2 text-sm tabular-nums"
+                    :class="invoiceAmountError(inv) ? 'border-crit' : 'border-rule'"
+                  />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <span class="block text-[10px] text-ink-3 mb-0.5">
+                    Reference no{{ referenceRequired ? "" : " (optional)" }}
+                  </span>
+                  <input
+                    v-model="invoiceReferences[inv.name]"
+                    type="text"
+                    placeholder="Cheque or UTR"
+                    class="w-full h-[36px] rounded-[8px] border bg-surface px-2 text-sm"
+                    :class="invoiceReferenceError(inv) ? 'border-crit' : 'border-rule'"
+                  />
+                </div>
               </div>
               <p v-if="isSelected(inv) && invoiceAmountError(inv)" class="text-xs text-crit mt-1 pl-[26px]">
                 {{ invoiceAmountError(inv) }}
@@ -80,6 +94,9 @@
                 class="text-xs text-ink-3 mt-1 pl-[26px]"
               >
                 Partial · {{ formatCurrency(inv.outstanding_amount - invoiceAmounts[inv.name]) }} will remain outstanding
+              </p>
+              <p v-if="isSelected(inv) && invoiceReferenceError(inv)" class="text-xs text-crit mt-1 pl-[26px]">
+                {{ invoiceReferenceError(inv) }}
               </p>
             </div>
           </div>
@@ -98,18 +115,9 @@
               </select>
             </div>
 
-            <div>
-              <label class="block text-sm font-display text-ink-2 mb-1">
-                Reference no{{ referenceRequired ? "" : " (optional)" }}
-              </label>
-              <input
-                v-model="referenceNo"
-                type="text"
-                placeholder="Cheque or UTR number"
-                class="w-full h-[46px] rounded-[10px] border border-rule bg-surface px-3 text-sm"
-              />
-              <p v-if="referenceError" class="text-xs text-crit mt-1">{{ referenceError }}</p>
-            </div>
+            <p v-if="differentReferencesUsed" class="text-xs text-ink-3">
+              Different references were used - this will create {{ referenceGroupCount }} separate payment entries.
+            </p>
           </div>
 
           <p v-if="submitError" class="text-xs text-crit text-center">{{ submitError }}</p>
@@ -151,10 +159,14 @@ const ledger = ref({ customer_name: "", invoices: [], total_outstanding: 0 })
 // checkbox state and the per-row amount field share this single source of
 // truth instead of a separate selected-map.
 const invoiceAmounts = ref({})
+// Per-invoice reference (cheque/UTR number) - a rep collecting against
+// several invoices in one visit may have a different one for each. Kept
+// separate from invoiceAmounts since an invoice can be selected with no
+// reference yet typed (only required once a non-cash mode is picked).
+const invoiceReferences = ref({})
 
 const modeOfPayment = ref("")
 const modesOfPayment = ref([])
-const referenceNo = ref("")
 const submitting = ref(false)
 const submitError = ref("")
 
@@ -176,6 +188,13 @@ function invoiceAmountError(inv) {
   return ""
 }
 
+function invoiceReferenceError(inv) {
+  if (referenceRequired.value && !(invoiceReferences.value[inv.name] || "").trim()) {
+    return "Enter a reference number."
+  }
+  return ""
+}
+
 const selectedTotal = computed(() =>
   Object.values(invoiceAmounts.value).reduce((sum, v) => sum + (Number(v) || 0), 0)
 )
@@ -185,28 +204,38 @@ const referenceRequired = computed(() => {
   return !!mode && mode.type !== "Cash"
 })
 
-const referenceError = computed(() => {
-  if (referenceRequired.value && !referenceNo.value.trim()) {
-    return `Enter a reference number for ${modeOfPayment.value}.`
+const usedReferences = computed(() => {
+  const set = new Set()
+  for (const inv of ledger.value.invoices) {
+    if (!isSelected(inv)) continue
+    set.add((invoiceReferences.value[inv.name] || "").trim())
   }
-  return ""
+  return set
 })
+
+const referenceGroupCount = computed(() => usedReferences.value.size)
+const differentReferencesUsed = computed(() => referenceGroupCount.value > 1)
 
 const canSubmit = computed(() =>
   ledger.value.invoices.some(isSelected) &&
-  ledger.value.invoices.every((inv) => !isSelected(inv) || !invoiceAmountError(inv)) &&
+  ledger.value.invoices.every(
+    (inv) => !isSelected(inv) || (!invoiceAmountError(inv) && !invoiceReferenceError(inv))
+  ) &&
   selectedTotal.value > 0 &&
-  !!modeOfPayment.value &&
-  !referenceError.value
+  !!modeOfPayment.value
 )
 
 function toggleInvoice(inv) {
   if (isSelected(inv)) {
-    const next = { ...invoiceAmounts.value }
-    delete next[inv.name]
-    invoiceAmounts.value = next
+    const nextAmounts = { ...invoiceAmounts.value }
+    const nextRefs = { ...invoiceReferences.value }
+    delete nextAmounts[inv.name]
+    delete nextRefs[inv.name]
+    invoiceAmounts.value = nextAmounts
+    invoiceReferences.value = nextRefs
   } else {
     invoiceAmounts.value = { ...invoiceAmounts.value, [inv.name]: Number(inv.outstanding_amount) }
+    invoiceReferences.value = { ...invoiceReferences.value, [inv.name]: "" }
   }
 }
 
@@ -217,10 +246,16 @@ const allSelected = computed(
 function toggleAll() {
   if (allSelected.value) {
     invoiceAmounts.value = {}
+    invoiceReferences.value = {}
   } else {
-    const next = {}
-    for (const inv of ledger.value.invoices) next[inv.name] = Number(inv.outstanding_amount)
-    invoiceAmounts.value = next
+    const nextAmounts = {}
+    const nextRefs = {}
+    for (const inv of ledger.value.invoices) {
+      nextAmounts[inv.name] = Number(inv.outstanding_amount)
+      nextRefs[inv.name] = invoiceReferences.value[inv.name] || ""
+    }
+    invoiceAmounts.value = nextAmounts
+    invoiceReferences.value = nextRefs
   }
 }
 
@@ -234,9 +269,14 @@ async function load() {
     ])
     ledger.value = ledgerData
     modesOfPayment.value = modes
-    const next = {}
-    for (const inv of ledgerData.invoices) next[inv.name] = Number(inv.outstanding_amount)
-    invoiceAmounts.value = next
+    const nextAmounts = {}
+    const nextRefs = {}
+    for (const inv of ledgerData.invoices) {
+      nextAmounts[inv.name] = Number(inv.outstanding_amount)
+      nextRefs[inv.name] = ""
+    }
+    invoiceAmounts.value = nextAmounts
+    invoiceReferences.value = nextRefs
   } catch (err) {
     loadError.value = err.messages?.[0] || err.message || "Could not load this customer's ledger."
   } finally {
@@ -249,11 +289,17 @@ async function submit() {
   submitting.value = true
   submitError.value = ""
   try {
+    const references = {}
+    for (const [name, ref] of Object.entries(invoiceReferences.value)) {
+      if (Object.prototype.hasOwnProperty.call(invoiceAmounts.value, name) && ref && ref.trim()) {
+        references[name] = ref.trim()
+      }
+    }
     await call("field_sales.api.customers.record_collection", {
       customer,
       invoice_amounts: invoiceAmounts.value,
+      invoice_references: references,
       mode_of_payment: modeOfPayment.value,
-      reference_no: referenceNo.value || undefined,
     })
     router.replace("/reports/collections")
   } catch (err) {

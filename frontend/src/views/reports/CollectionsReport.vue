@@ -78,7 +78,13 @@
           description="Payments recorded from this app will show up here."
         />
         <div v-else class="space-y-2">
-          <div v-for="row in history" :key="row.name" class="bg-surface rounded-2xl border border-rule p-3">
+          <button
+            v-for="row in history"
+            :key="row.name"
+            type="button"
+            class="w-full text-left bg-surface rounded-2xl border border-rule p-3"
+            @click="openCollection(row)"
+          >
             <div class="flex items-start justify-between gap-3">
               <p class="font-display font-medium text-ink truncate">{{ row.customer_name || row.customer }}</p>
               <span class="font-display font-semibold text-ink tabular-nums shrink-0">+{{ formatCurrency(row.paid_amount) }}</span>
@@ -87,7 +93,7 @@
               {{ row.mode_of_payment }}<template v-if="row.reference_no"> · {{ row.reference_no }}</template>
               · {{ row.posting_date }} · by {{ row.collected_by }}
             </p>
-          </div>
+          </button>
         </div>
       </template>
     </div>
@@ -118,6 +124,10 @@ const historyError = ref("")
 
 function collect(row) {
   router.push({ name: "CollectPayment", params: { customer: row.name } })
+}
+
+function openCollection(row) {
+  router.push({ name: "CollectionDetail", params: { name: row.name } })
 }
 
 function onHistoryTab() {

@@ -85,6 +85,7 @@ const routes = [
   { path: "/reports/coverage", name: "CustomerCoverageReport", component: () => import("@/views/reports/CustomerCoverageReport.vue") },
   { path: "/reports/collections", name: "CollectionsReport", component: () => import("@/views/reports/CollectionsReport.vue") },
   { path: "/reports/collections/:customer/collect", name: "CollectPayment", component: () => import("@/views/reports/CollectPayment.vue"), props: true },
+  { path: "/reports/collections/history/:name", name: "CollectionDetail", component: () => import("@/views/reports/CollectionDetail.vue"), props: true },
   { path: "/reports/onboarding-funnel", name: "OnboardingFunnelReport", component: () => import("@/views/reports/OnboardingFunnelReport.vue") },
 
   // Approval queue (for managers)
