@@ -11,7 +11,7 @@ the client build had and is worth keeping.
 """
 
 import frappe
-from frappe.utils import flt, getdate, nowdate
+from frappe.utils import cint, flt, getdate, nowdate
 
 from field_sales import scope
 from field_sales.api.listing import ListConfig, paginated_list
@@ -71,19 +71,64 @@ DISTRIBUTOR_CONFIG = ListConfig(
     doctype="Customer",
     fields=["name", "customer_name", "territory"],
     search_fields=["name", "customer_name"],
-    filter_fields={"territory": "territory"},
-    territory_field="territory",
+    filter_fields={},
+    # Not scoped by the generic territory_field mechanism - a distributor's
+    # own `territory` records where *it* is registered, which routinely
+    # differs from where the outlets it actually serves are (a distributor
+    # can be based in one city and supply Secondary customers all over the
+    # state). Scoping on that field would hide a rep's own real channel
+    # partner just because head office sits outside their patch. See
+    # distributor_list below for the scoping that's actually correct here.
+    territory_field=None,
     owner_field=None,
     default_order="customer_name asc",
     sortable_fields=["name", "customer_name"],
-    base_filters={"is_dl": 1, "disabled": 0},
+    # is_dl alone isn't a safe distributor test: it's meant to mark a
+    # Primary customer as a channel partner, but bad data has left it set
+    # on several Secondary customers too (their own channel partner's own
+    # flag, copied onto them by mistake). Requiring customer_level=Primary
+    # as well keeps a mis-flagged outlet from ever showing up as a channel
+    # partner option, regardless of what is_dl says on its own.
+    base_filters={"is_dl": 1, "customer_level": "Primary", "disabled": 0},
 )
 
 
 @frappe.whitelist()
 def distributor_list():
-    """Distributor-level customers, for picking a channel partner."""
-    return paginated_list(DISTRIBUTOR_CONFIG)
+    """Distributor-level customers, for picking a channel partner.
+
+    Scoped to distributors that actually have a Secondary customer in the
+    caller's own territory - not to the distributor's own `territory`
+    field (see DISTRIBUTOR_CONFIG's comment for why that's the wrong
+    dimension). A rep who can already see a Secondary customer needs to be
+    able to find that customer's real channel partner, wherever the
+    distributor itself is nominally registered.
+    """
+    extra_filters = None
+    if not scope.has_unrestricted_scope():
+        territories = scope.effective_territories()
+        reachable: list[str] = []
+        if territories:
+            reachable = list(
+                {
+                    name
+                    for name in frappe.get_all(
+                        "Customer",
+                        filters={
+                            "customer_level": "Secondary",
+                            "territory": ["in", territories],
+                        },
+                        pluck="custom_channel_partner",
+                    )
+                    if name
+                }
+            )
+        # An empty list here must mean "no reachable distributor", not "no
+        # filter" - frappe.get_all treats `["in", []]` as "match nothing",
+        # which is exactly the fail-closed behaviour a scoped user with no
+        # reachable distributors needs.
+        extra_filters = {"name": ["in", reachable]}
+    return paginated_list(DISTRIBUTOR_CONFIG, extra_filters=extra_filters)
 
 
 @frappe.whitelist()
@@ -153,6 +198,189 @@ def customer_ledger(customer: str, from_date: str | None = None,
 
 
 @frappe.whitelist()
+def mode_of_payment_list() -> list:
+    """Every Mode of Payment on file, for the collection form's picker -
+    a small, bounded master list, same convention as a plain frappe.get_all
+    with no search needed (see the sweep that added search everywhere it was
+    actually needed - this one was correctly left alone)."""
+    return frappe.get_all(
+        "Mode of Payment", filters={"enabled": 1}, fields=["name", "type"], order_by="name"
+    )
+
+
+def _mode_of_payment_account(mode_of_payment: str, company: str) -> str:
+    """The account a collected payment actually lands in - ERPNext lets a
+    Mode of Payment carry a per-company default (Mode of Payment Account),
+    and only falls back to the company's own default cash/bank account when
+    no such row exists, exactly like the desk Payment Entry form does."""
+    account = frappe.db.get_value(
+        "Mode of Payment Account",
+        {"parent": mode_of_payment, "company": company},
+        "default_account",
+    )
+    if account:
+        return account
+
+    mop_type = frappe.db.get_value("Mode of Payment", mode_of_payment, "type")
+    company_doc = frappe.get_cached_doc("Company", company)
+    account = company_doc.default_cash_account if mop_type == "Cash" else company_doc.default_bank_account
+    if not account:
+        frappe.throw(
+            frappe._(
+                "No default account is configured for {0}. Ask an administrator to set one up."
+            ).format(mode_of_payment)
+        )
+    return account
+
+
+@frappe.whitelist()
+def record_collection(
+    customer: str,
+    amount: float,
+    mode_of_payment: str,
+    invoices: str | list | None = None,
+    reference_no: str | None = None,
+) -> dict:
+    """Record a payment collected from a customer in the field.
+
+    Creates a real, submitted Payment Entry - the same document type the
+    desk side and every ledger/report already reads - rather than a
+    parallel "collection" record only this app would understand. Allocated
+    across the customer's outstanding invoices oldest-due-first, optionally
+    narrowed to a caller-picked subset.
+    """
+    from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+
+    if not frappe.has_permission("Customer", "read", doc=customer):
+        raise frappe.PermissionError
+
+    if not scope.has_unrestricted_scope():
+        customer_territory = frappe.db.get_value("Customer", customer, "territory")
+        if customer_territory not in scope.effective_territories():
+            frappe.throw(frappe._("{0} is outside your territory.").format(customer))
+
+    amount = flt(amount)
+    if amount <= 0:
+        frappe.throw(frappe._("Enter an amount greater than zero."))
+
+    mop_type = frappe.db.get_value("Mode of Payment", mode_of_payment, "type")
+    if mop_type != "Cash" and not (reference_no and reference_no.strip()):
+        frappe.throw(frappe._("Enter a reference number for {0}.").format(mode_of_payment))
+
+    employee = frappe.db.get_value(
+        "Employee", {"user_id": frappe.session.user, "status": "Active"}, "name"
+    )
+    if not employee:
+        frappe.throw(frappe._("No active Employee record is linked to your account."))
+
+    outstanding = frappe.get_all(
+        "Sales Invoice",
+        filters={"customer": customer, "docstatus": 1, "outstanding_amount": [">", 0]},
+        fields=["name", "outstanding_amount", "due_date"],
+        order_by="due_date asc, posting_date asc",
+    )
+
+    if invoices:
+        if isinstance(invoices, str):
+            invoices = frappe.parse_json(invoices)
+        wanted = set(invoices)
+        outstanding = [i for i in outstanding if i.name in wanted]
+
+    if not outstanding:
+        frappe.throw(frappe._("No matching outstanding invoices for {0}.").format(customer))
+
+    total_selected = flt(sum(flt(i.outstanding_amount) for i in outstanding), 2)
+    if amount > total_selected + 0.01:
+        frappe.throw(
+            frappe._(
+                "Amount collected ({0}) cannot exceed the outstanding total of the "
+                "selected invoices ({1})."
+            ).format(amount, total_selected)
+        )
+
+    # get_payment_entry (and Payment Entry's own validate()) read the
+    # account's balance via erpnext.accounts.utils.get_balance_on, which
+    # checks read permission on Account unless this flag is set - correct
+    # for a desk user browsing the chart of accounts, wrong for a field rep
+    # who is only ever posting against a company-derived, system-picked
+    # account they never see or choose themselves.
+    frappe.flags.ignore_account_permission = True
+    try:
+        pe = get_payment_entry("Sales Invoice", outstanding[0].name, party_amount=amount)
+        pe.mode_of_payment = mode_of_payment
+        pe.paid_to = _mode_of_payment_account(mode_of_payment, pe.company)
+        pe.reference_no = reference_no or f"Field collection - {employee}"
+        pe.reference_date = nowdate()
+        pe.paid_amount = amount
+        pe.received_amount = amount
+        if pe.meta.has_field("created_by_emp"):
+            pe.created_by_emp = employee
+
+        schedules_by_invoice: dict[str, list] = {}
+        for row in frappe.get_all(
+            "Payment Schedule",
+            filters={"parent": ["in", [inv.name for inv in outstanding]], "outstanding": [">", 0]},
+            fields=["parent", "payment_term", "due_date", "payment_amount", "outstanding"],
+            order_by="parent, due_date asc",
+        ):
+            schedules_by_invoice.setdefault(row.parent, []).append(row)
+
+        pe.set("references", [])
+        remaining = amount
+        for inv in outstanding:
+            if remaining <= 0.01:
+                break
+            schedule = schedules_by_invoice.get(inv.name)
+            if not schedule:
+                # No payment-term split on this invoice - one reference row
+                # against the whole thing, same as before.
+                alloc = min(flt(inv.outstanding_amount), remaining)
+                pe.append(
+                    "references",
+                    {
+                        "reference_doctype": "Sales Invoice",
+                        "reference_name": inv.name,
+                        "due_date": inv.due_date,
+                        "total_amount": inv.outstanding_amount,
+                        "outstanding_amount": inv.outstanding_amount,
+                        "allocated_amount": alloc,
+                    },
+                )
+                remaining -= alloc
+                continue
+
+            # This invoice has "Payment Term based allocation" enabled -
+            # ERPNext requires a payment_term on every reference row in that
+            # case, and refuses an allocation that doesn't respect each
+            # term's own outstanding. Walk the schedule oldest-due-first,
+            # same ordering the invoice-level loop already uses.
+            for term in schedule:
+                if remaining <= 0.01:
+                    break
+                alloc = min(flt(term.outstanding), remaining)
+                pe.append(
+                    "references",
+                    {
+                        "reference_doctype": "Sales Invoice",
+                        "reference_name": inv.name,
+                        "payment_term": term.payment_term,
+                        "due_date": term.due_date,
+                        "total_amount": term.payment_amount,
+                        "outstanding_amount": term.outstanding,
+                        "allocated_amount": alloc,
+                    },
+                )
+                remaining -= alloc
+
+        pe.insert()
+        pe.submit()
+    finally:
+        frappe.flags.ignore_account_permission = False
+
+    return {"payment_entry": pe.name, "amount": flt(pe.paid_amount, 2), "customer": customer}
+
+
+@frappe.whitelist()
 def invoice_items(invoice: str):
     """Line items on a submitted invoice, to prefill a complaint's claimed
     items - a rep filing a complaint against a specific invoice should start
@@ -210,6 +438,149 @@ def request_customer_change(customer: str, requested_change: str):
     })
     doc.insert(ignore_permissions=True)
     return {"name": doc.name, "status": doc.status}
+
+
+@frappe.whitelist()
+def coverage_report(min_days: int = 30) -> dict:
+    """Customers in the caller's territory, sorted by how long it has been
+    since a submitted Field Visit against them - the gap neither Visit
+    Report (one day at a time) nor Performance (ranks reps, not customers)
+    answers: which of MY customers have I actually not been to see.
+
+    Scoped by the customer's own territory field, same as customer_list -
+    unlike distributor_list, there is no "wrong dimension" trap here, since
+    the question is genuinely about customers registered in my patch, not
+    about a distributor's downstream outlets elsewhere.
+
+    ``min_days`` only changes the overdue count in the summary - every
+    scoped customer is still returned (most overdue, or never visited,
+    first), so a shorter window never hides anyone from the list itself.
+    """
+    user = frappe.session.user
+    min_days = max(1, cint(min_days) or 30)
+
+    filters = {"disabled": 0}
+    filters.update(scope.territory_filter(user, "territory"))
+    customers = frappe.get_all(
+        "Customer",
+        filters=filters,
+        fields=["name", "customer_name", "customer_level", "territory"],
+    )
+    if not customers:
+        return {"records": [], "overdue_count": 0, "min_days": min_days, "total_count": 0}
+
+    names = [c.name for c in customers]
+    last_visits = {
+        r.customer: r.last_visit
+        for r in frappe.get_all(
+            "Field Visit",
+            filters={"customer": ["in", names], "docstatus": 1},
+            group_by="customer",
+            fields=["customer", "max(visit_date) as last_visit"],
+        )
+    }
+
+    today = getdate(nowdate())
+    records = []
+    for c in customers:
+        last_visit = last_visits.get(c.name)
+        days_since = (today - getdate(last_visit)).days if last_visit else None
+        records.append({
+            "name": c.name,
+            "customer_name": c.customer_name,
+            "customer_level": c.customer_level,
+            "territory": c.territory,
+            "last_visit_date": last_visit,
+            "days_since": days_since,
+        })
+
+    # Never-visited customers are the biggest gap of all, so they sort
+    # first - then longest-overdue first, then alphabetically so ties don't
+    # reorder between two otherwise-identical requests.
+    records.sort(key=lambda r: (
+        0 if r["days_since"] is None else 1,
+        -(r["days_since"] or 0),
+        r["customer_name"] or "",
+    ))
+
+    overdue_count = sum(1 for r in records if r["days_since"] is None or r["days_since"] >= min_days)
+    return {
+        "records": records,
+        "overdue_count": overdue_count,
+        "min_days": min_days,
+        "total_count": len(records),
+    }
+
+
+@frappe.whitelist()
+def collections_report(min_outstanding: float = 0) -> dict:
+    """Outstanding balance across every customer in the caller's territory,
+    ranked by amount owed - customer_ledger already computes this same
+    figure, but only for one customer at a time. This is the rollup a rep
+    or manager needs to decide who to chase first, without opening every
+    customer's ledger one by one.
+
+    Reads Sales Invoice directly (like customer_ledger does) rather than
+    via frappe.get_list, since a field rep's role has no document-level
+    read permission on Sales Invoice itself - only the Customer scoping
+    check below stands in for that, matching the convention already used
+    everywhere else in this module.
+    """
+    user = frappe.session.user
+    min_outstanding = flt(min_outstanding)
+
+    filters = {"disabled": 0}
+    filters.update(scope.territory_filter(user, "territory"))
+    customers = frappe.get_all(
+        "Customer",
+        filters=filters,
+        fields=["name", "customer_name", "customer_level", "territory"],
+    )
+    if not customers:
+        return {"records": [], "total_outstanding": 0, "total_overdue_count": 0, "total_count": 0}
+
+    names = [c.name for c in customers]
+    today = getdate(nowdate())
+    invoices = frappe.get_all(
+        "Sales Invoice",
+        filters={"customer": ["in", names], "docstatus": 1, "outstanding_amount": [">", 0]},
+        fields=["customer", "outstanding_amount", "due_date"],
+    )
+
+    # One pass over every scoped customer's invoices, rather than one query
+    # per customer (what a naive port of customer_ledger's own loop would
+    # do) - the same batching principle _orders_by_employee already uses
+    # in field_sales.api.home.
+    by_customer: dict[str, dict] = {}
+    for inv in invoices:
+        entry = by_customer.setdefault(inv.customer, {"outstanding": 0.0, "invoice_count": 0, "overdue_count": 0})
+        entry["outstanding"] += flt(inv.outstanding_amount)
+        entry["invoice_count"] += 1
+        if inv.due_date and getdate(inv.due_date) < today:
+            entry["overdue_count"] += 1
+
+    records = []
+    for c in customers:
+        totals = by_customer.get(c.name)
+        if not totals or totals["outstanding"] < min_outstanding:
+            continue
+        records.append({
+            "name": c.name,
+            "customer_name": c.customer_name,
+            "customer_level": c.customer_level,
+            "territory": c.territory,
+            "outstanding": round(totals["outstanding"], 2),
+            "invoice_count": totals["invoice_count"],
+            "overdue_count": totals["overdue_count"],
+        })
+    records.sort(key=lambda r: -r["outstanding"])
+
+    return {
+        "records": records,
+        "total_outstanding": round(sum(r["outstanding"] for r in records), 2),
+        "total_overdue_count": sum(r["overdue_count"] for r in records),
+        "total_count": len(records),
+    }
 
 
 @frappe.whitelist()

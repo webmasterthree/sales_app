@@ -112,7 +112,7 @@
             @picked="(item) => onItemPicked(data, row, item)"
           />
 
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-1 gap-2.5">
             <div>
               <label class="block text-xs text-ink-3 mb-1">Qty</label>
               <input

@@ -2,7 +2,7 @@
  {
   "amend": 0,
   "cancel": 0,
-  "create": 0,
+  "create": 1,
   "delete": 0,
   "docstatus": 0,
   "doctype": "Custom DocPerm",
@@ -10,17 +10,17 @@
   "export": 1,
   "if_owner": 0,
   "import": 0,
-  "modified": "2026-08-23 17:43:46.984820",
-  "name": "pufjtg2h4n",
-  "parent": "Pricing Rule",
+  "modified": "2026-09-19 12:57:06.103505",
+  "name": "jubkbs9abl",
+  "parent": "Payment Entry",
   "permlevel": 0,
-  "print": 0,
+  "print": 1,
   "read": 1,
-  "report": 0,
+  "report": 1,
   "role": "Sales Executive App",
   "select": 0,
   "share": 0,
-  "submit": 0,
-  "write": 0
+  "submit": 1,
+  "write": 1
  }
 ]

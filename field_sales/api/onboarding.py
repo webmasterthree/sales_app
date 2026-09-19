@@ -8,8 +8,9 @@ onboarding is now its own doctype, so it is a normal list.
 """
 
 import frappe
+from frappe.utils import getdate, nowdate
 
-from field_sales import uploads
+from field_sales import scope, uploads
 from field_sales.api.listing import ListConfig, paginated_list
 
 ONBOARDING_CONFIG = ListConfig(
@@ -52,6 +53,68 @@ ONBOARDING_CONFIG = ListConfig(
 @frappe.whitelist()
 def onboarding_list():
     return paginated_list(ONBOARDING_CONFIG)
+
+
+@frappe.whitelist()
+def onboarding_funnel_report() -> dict:
+    """The approval funnel for Customer Onboarding requests in the caller's
+    territory - how many are still pending, how many were approved or
+    rejected, and how long a decision actually took. onboarding_list's own
+    status tabs only ever show one bucket at a time; this is the rollup
+    across all of them, plus the one thing no list view surfaces at all:
+    days from request to decision.
+
+    Doubles as a real replacement for Reports' disabled "New Wins" tile -
+    an onboarding reaching Approved is exactly a new customer won, and
+    unlike a fabricated counter this reads the real decided_on/status
+    fields approve_onboarding already stamps, rather than inventing new
+    tracking.
+    """
+    user = frappe.session.user
+    filters = {}
+    filters.update(scope.territory_filter(user, "territory"))
+
+    rows = frappe.get_all(
+        "Customer Onboarding",
+        filters=filters,
+        fields=["name", "customer_name", "territory", "docstatus", "status",
+                "request_date", "decided_on"],
+    )
+
+    draft = [r for r in rows if r.docstatus == 0]
+    pending = [r for r in rows if r.docstatus == 1 and r.status == "Pending"]
+    approved = [r for r in rows if r.status == "Approved"]
+    rejected = [r for r in rows if r.status == "Rejected"]
+
+    decision_days = [
+        (getdate(r.decided_on) - getdate(r.request_date)).days
+        for r in approved + rejected
+        if r.request_date and r.decided_on
+    ]
+    avg_decision_days = round(sum(decision_days) / len(decision_days), 1) if decision_days else None
+
+    today = getdate(nowdate())
+    pending_rows = []
+    for r in pending:
+        waiting_days = (today - getdate(r.request_date)).days if r.request_date else None
+        pending_rows.append({
+            "name": r.name,
+            "customer_name": r.customer_name,
+            "territory": r.territory,
+            "request_date": r.request_date,
+            "waiting_days": waiting_days,
+        })
+    # Longest-waiting request first - the one most overdue for a decision.
+    pending_rows.sort(key=lambda r: -(r["waiting_days"] or 0))
+
+    return {
+        "draft_count": len(draft),
+        "pending_count": len(pending),
+        "approved_count": len(approved),
+        "rejected_count": len(rejected),
+        "avg_decision_days": avg_decision_days,
+        "pending": pending_rows,
+    }
 
 
 @frappe.whitelist()

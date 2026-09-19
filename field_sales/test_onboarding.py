@@ -212,7 +212,7 @@ class TestCustomerOnboarding(FrappeTestCase):
             self._draft(gstin=None)
 
     def test_unregistered_business_clears_gst_fields(self):
-        result = self._draft(business_type="Unregistered", gstin=None, gst_category=None)
+        result = self._draft(business_type="UnRegistered", gstin=None, gst_category=None)
         doc = frappe.get_doc("Customer Onboarding", result["name"])
         self.assertIsNone(doc.gstin)
 

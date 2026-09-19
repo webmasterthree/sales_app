@@ -61,7 +61,7 @@ class CustomerOnboarding(Document):
     def validate_business_type(self):
         if self.business_type == "Registered" and not self.gstin:
             frappe.throw(_("A registered business needs a GSTIN."))
-        if self.business_type == "Unregistered":
+        if self.business_type == "UnRegistered":
             self.gstin = None
             self.gst_category = None
 

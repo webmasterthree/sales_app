@@ -33,6 +33,44 @@
             {{ data.percent >= 100 ? "Target met for this month." : `${100 - data.percent}% left to reach this month's target.` }}
           </p>
         </div>
+
+        <!-- Trend: the single snapshot above can't say whether this rep is
+             improving. A 6-month view can - each bar is that month's own
+             percent-of-target, same figure the snapshot card shows for the
+             current month, just repeated over time. -->
+        <div class="bg-surface rounded-2xl border border-rule p-4">
+          <p class="text-sm font-display font-semibold text-ink mb-3">Last 6 months</p>
+
+          <LoadingSkeleton v-if="historyLoading" />
+          <p v-else-if="historyError" class="text-xs text-warn">{{ historyError }}</p>
+          <div v-else-if="history.length" class="flex items-end justify-between gap-2 h-36">
+            <div
+              v-for="m in history"
+              :key="m.label"
+              class="flex-1 flex flex-col items-center justify-end h-full"
+            >
+              <span
+                v-if="m.percent > 100"
+                class="text-[10px] font-display font-semibold text-accent-ink mb-1"
+              >{{ m.percent }}%</span>
+              <div class="w-full flex-1 flex items-end">
+                <div
+                  class="w-full rounded-t-md transition-[height]"
+                  :class="barClass(m)"
+                  :style="{ height: barHeight(m) + '%' }"
+                  :title="`${m.label}: ${formatCurrency(m.achieved_amount)} of ${formatCurrency(m.target_amount)} (${m.percent}%)`"
+                />
+              </div>
+              <span class="text-[10px] text-ink-3 mt-1.5">{{ m.label.split(' ')[0] }}</span>
+            </div>
+          </div>
+          <p v-else class="text-xs text-ink-3">No history to show yet.</p>
+
+          <div class="flex items-center gap-3 mt-3 pt-3 border-t border-rule-soft text-[10px] text-ink-3">
+            <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-accent inline-block" /> Met target</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-accent-soft inline-block" /> Below target</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -50,6 +88,10 @@ const data = ref({ has_target: false, target_amount: 0, achieved_amount: 0, perc
 const loading = ref(true)
 const error = ref("")
 
+const history = ref([])
+const historyLoading = ref(true)
+const historyError = ref("")
+
 async function load() {
   loading.value = true
   error.value = ""
@@ -62,9 +104,39 @@ async function load() {
   }
 }
 
+async function loadHistory() {
+  historyLoading.value = true
+  historyError.value = ""
+  try {
+    const result = await call("field_sales.api.home.sales_target_history", { months: 6 })
+    history.value = result.months || []
+  } catch (err) {
+    historyError.value = err.messages?.[0] || err.message || "Could not load the trend."
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+// Bar height is scaled to the highest achievement in the window (capped at
+// a 100%-of-target reference line), not to each month's own percent, so a
+// 475%-of-target month doesn't flatten every ordinary month into a sliver
+// next to it. A month with no target data at all still draws a token-height
+// bar rather than nothing, so a genuinely-zero month stays visible.
+const MIN_BAR_PERCENT = 4
+function barHeight(m) {
+  const reference = Math.max(100, ...history.value.map((h) => h.percent))
+  return Math.max(MIN_BAR_PERCENT, Math.min(100, (m.percent / reference) * 100))
+}
+function barClass(m) {
+  return m.percent >= 100 ? "bg-accent" : "bg-accent-soft"
+}
+
 function formatCurrency(value) {
   return `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadHistory()
+})
 </script>

@@ -32,7 +32,7 @@
         </p>
 
         <form v-if="editing" class="mt-4 space-y-3 border-t border-rule pt-4" @submit.prevent="saveProfile">
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 gap-3">
             <div>
               <label class="block text-xs font-display text-ink-2 mb-1">First name</label>
               <input

@@ -64,5 +64,10 @@ const PATHS = {
   square: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
   smartphone: '<rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M11.5 18h1"/>',
   camera: '<path d="M4 8h3l1.5-2.5h7L17 8h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.5" r="3.5"/>',
+
+  // small form-section markers
+  info: '<circle cx="12" cy="12" r="9.5"/><path d="M12 11v5.5"/><path d="M12 7.5h.01"/>',
+  "map-pin": '<path d="M12 21s7-6.5 7-11.5a7 7 0 0 0-14 0C5 14.5 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  "trending-up": '<path d="M3 17 9 11l4 4 8-8"/><path d="M15 7h6v6"/>',
 }
 </script>

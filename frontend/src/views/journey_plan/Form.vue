@@ -60,15 +60,15 @@
 
           <div class="rounded-xl bg-ground border border-rule-soft p-3 space-y-2">
             <p class="text-xs font-display font-medium text-ink-3 uppercase tracking-wide">From</p>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div class="grid grid-cols-1 gap-2">
               <div>
                 <label class="block text-xs text-ink-3 mb-1">State</label>
                 <select
                   :value="row.travel_state_from"
-                  class="w-full h-[42px] rounded-[10px] border border-rule bg-surface px-2 text-sm"
+                  class="w-full h-[44px] rounded-[10px] border border-rule bg-surface px-3 text-sm"
                   @change="onStateChange(row, i, 'from', $event.target.value)"
                 >
-                  <option value="">Select state</option>
+                  <option value="">Select…</option>
                   <option v-for="s in states" :key="s.name" :value="s.name">{{ s.state }}</option>
                 </select>
               </div>
@@ -76,11 +76,11 @@
                 <label class="block text-xs text-ink-3 mb-1">District</label>
                 <select
                   :value="row.travel_from_district"
-                  class="w-full h-[42px] rounded-[10px] border border-rule bg-surface px-2 text-sm disabled:opacity-50"
+                  class="w-full h-[44px] rounded-[10px] border border-rule bg-surface px-3 text-sm disabled:opacity-50"
                   :disabled="!row.travel_state_from"
                   @change="onDistrictChange(row, i, 'from', $event.target.value)"
                 >
-                  <option value="">Select district</option>
+                  <option value="">Select…</option>
                   <option v-for="d in rowMeta(i).fromDistricts" :key="d.name" :value="d.name">{{ d.district }}</option>
                 </select>
               </div>
@@ -88,11 +88,11 @@
                 <label class="block text-xs text-ink-3 mb-1">City</label>
                 <select
                   :value="row.travel_from_city"
-                  class="w-full h-[42px] rounded-[10px] border border-rule bg-surface px-2 text-sm disabled:opacity-50"
+                  class="w-full h-[44px] rounded-[10px] border border-rule bg-surface px-3 text-sm disabled:opacity-50"
                   :disabled="!row.travel_from_district"
                   @change="row.travel_from_city = $event.target.value"
                 >
-                  <option value="">Select city</option>
+                  <option value="">Select…</option>
                   <option v-for="c in rowMeta(i).fromCities" :key="c.name" :value="c.name">{{ c.city }}</option>
                 </select>
               </div>
@@ -106,15 +106,15 @@
 
           <div v-if="!isTrue(row.same_as_from_address)" class="rounded-xl bg-ground border border-rule-soft p-3 space-y-2">
             <p class="text-xs font-display font-medium text-ink-3 uppercase tracking-wide">To</p>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div class="grid grid-cols-1 gap-2">
               <div>
                 <label class="block text-xs text-ink-3 mb-1">State</label>
                 <select
                   :value="row.travel_to_state"
-                  class="w-full h-[42px] rounded-[10px] border border-rule bg-surface px-2 text-sm"
+                  class="w-full h-[44px] rounded-[10px] border border-rule bg-surface px-3 text-sm"
                   @change="onStateChange(row, i, 'to', $event.target.value)"
                 >
-                  <option value="">Select state</option>
+                  <option value="">Select…</option>
                   <option v-for="s in states" :key="s.name" :value="s.name">{{ s.state }}</option>
                 </select>
               </div>
@@ -122,11 +122,11 @@
                 <label class="block text-xs text-ink-3 mb-1">District</label>
                 <select
                   :value="row.travel_to_district"
-                  class="w-full h-[42px] rounded-[10px] border border-rule bg-surface px-2 text-sm disabled:opacity-50"
+                  class="w-full h-[44px] rounded-[10px] border border-rule bg-surface px-3 text-sm disabled:opacity-50"
                   :disabled="!row.travel_to_state"
                   @change="onDistrictChange(row, i, 'to', $event.target.value)"
                 >
-                  <option value="">Select district</option>
+                  <option value="">Select…</option>
                   <option v-for="d in rowMeta(i).toDistricts" :key="d.name" :value="d.name">{{ d.district }}</option>
                 </select>
               </div>
@@ -134,11 +134,11 @@
                 <label class="block text-xs text-ink-3 mb-1">City</label>
                 <select
                   :value="row.travel_to_city"
-                  class="w-full h-[42px] rounded-[10px] border border-rule bg-surface px-2 text-sm disabled:opacity-50"
+                  class="w-full h-[44px] rounded-[10px] border border-rule bg-surface px-3 text-sm disabled:opacity-50"
                   :disabled="!row.travel_to_district"
                   @change="row.travel_to_city = $event.target.value"
                 >
-                  <option value="">Select city</option>
+                  <option value="">Select…</option>
                   <option v-for="c in rowMeta(i).toCities" :key="c.name" :value="c.name">{{ c.city }}</option>
                 </select>
               </div>

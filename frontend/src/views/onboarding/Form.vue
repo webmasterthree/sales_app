@@ -97,7 +97,7 @@ const steps = [
     title: "Business",
     fields: [
       { key: "customer_name", label: "Customer / business name", type: "text", required: true },
-      { key: "business_type", label: "Business type", type: "select", options: ["Registered", "Unregistered"], required: true },
+      { key: "business_type", label: "Business type", type: "select", options: ["Registered", "UnRegistered"], required: true },
       { key: "gst_category", label: "GST category", type: "select", options: [
         "Registered Regular", "Registered Composition", "Unregistered", "SEZ", "Overseas", "Deemed Export", "UIN Holders", "Composition",
       ] },

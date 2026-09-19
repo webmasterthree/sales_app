@@ -9,193 +9,154 @@
     @saved="onSaved"
   >
     <template #step-0="{ data }">
-      <div class="bg-surface rounded-2xl p-4 space-y-4">
-        <div>
-          <label class="block text-sm font-display text-ink-2 mb-1">
-            Party type <span class="text-crit">*</span>
-          </label>
-          <select v-model="data.party_type" class="w-full h-[52px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm">
-            <option value="">Select…</option>
-            <option value="Customer">Customer</option>
-            <option value="Prospect">Prospect</option>
-          </select>
-        </div>
-
-        <!-- Primary/Secondary here only narrows which list the search box
-             looks in - unlike the Prospect path's Visit type toggle below,
-             it never sets data.visit_type itself. A real Customer's type is
-             still read from its own record once picked (see the read-only
-             "Customer type" display just below), whichever list it was
-             found through. Two lists rather than one combined search
-             because a Secondary customer is reached through - and searched
-             for via - its own outlet name, not by browsing the same list as
-             every distributor. -->
-        <div v-if="data.party_type === 'Customer'" class="flex gap-2">
-          <button
-            v-for="opt in ['Primary', 'Secondary']"
-            :key="opt"
-            type="button"
-            class="flex-1 py-2 rounded-[10px] text-sm font-display border"
-            :class="customerSearchScope === opt ? 'bg-accent text-accent-fg border-accent' : 'bg-surface border-rule text-ink-2'"
-            @click="onCustomerScopeChanged(data, opt)"
-          >
-            {{ opt }}
-          </button>
-        </div>
-        <CustomerPicker
-          v-if="data.party_type === 'Customer'"
-          :multiple="false"
-          label="Customer"
-          :extra-filters="{ customer_level: customerSearchScope }"
-          :model-value="data.customer"
-          @update:model-value="onCustomerPicked(data, $event)"
-        />
-        <div v-else-if="data.party_type === 'Prospect'">
-          <label class="block text-sm font-display text-ink-2 mb-1">Prospect name (if new)</label>
-          <input v-model="data.prospect_name" class="w-full h-[52px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm" />
-        </div>
-
-        <!-- Visit type sits right after who the visit is for, since it's
-             the next thing that decides what the rest of the form needs -
-             a Customer's Primary/Secondary status and channel partner are
-             fixed on that customer's own master record (Customer.customer_level
-             / custom_channel_partner), not something a rep chooses per
-             visit. Picking a different channel partner per visit would let
-             the same customer end up attributed to different partners across
-             visits, which the master data already has one answer for. -->
-        <p v-if="customerLoadError" class="text-xs text-crit bg-crit/10 border border-crit/30 rounded-xl p-3">
-          {{ customerLoadError }}
-        </p>
-
-        <div v-if="data.party_type === 'Customer' && data.customer">
-          <label class="block text-sm font-display text-ink-2 mb-1">Customer type</label>
-          <div class="rounded-[10px] border border-rule bg-surface-2 px-3 py-2.5 text-sm text-ink">
-            {{ data.visit_type || "Primary" }}
-            <span v-if="data.visit_type === 'Secondary'" class="text-ink-2">
-              · via {{ channelPartnerName || data.channel_partner }}
-            </span>
+      <div class="bg-surface rounded-2xl border border-rule p-3.5 space-y-4">
+        <div class="space-y-3.5">
+          <div class="flex items-center gap-2 pb-1.5 border-b border-rule-soft">
+            <span class="w-5 h-5 rounded-full bg-accent-soft text-accent-ink flex items-center justify-center shrink-0"><Icon name="user" :size="11" /></span>
+            <p class="text-[11px] font-display font-semibold uppercase tracking-wide text-ink-2">Who</p>
           </div>
-          <p class="text-xs text-ink-3 mt-1">From this customer's own record - not editable here.</p>
-        </div>
+          <div>
+            <label class="block text-sm font-display text-ink-2 mb-1">
+              Party type <span class="text-crit">*</span>
+            </label>
+            <select v-model="data.party_type" class="w-full h-[46px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm">
+              <option value="">Select…</option>
+              <option value="Customer">Customer</option>
+              <option value="Prospect">Prospect</option>
+            </select>
+          </div>
 
-        <div v-if="data.party_type === 'Prospect'">
-          <label class="block text-sm font-display text-ink-2 mb-1">Visit type <span class="text-crit">*</span></label>
-          <div class="flex gap-2">
+          <!-- Primary/Secondary here only narrows which list the search box
+               looks in - unlike the Prospect path's Visit type toggle below,
+               it never sets data.visit_type itself. A real Customer's type is
+               still read from its own record once picked (see the read-only
+               "Customer type" display just below), whichever list it was
+               found through. Two lists rather than one combined search
+               because a Secondary customer is reached through - and searched
+               for via - its own outlet name, not by browsing the same list as
+               every distributor. -->
+          <div v-if="data.party_type === 'Customer'" class="flex gap-2">
             <button
               v-for="opt in ['Primary', 'Secondary']"
               :key="opt"
               type="button"
               class="flex-1 py-2 rounded-[10px] text-sm font-display border"
-              :class="data.visit_type === opt ? 'bg-accent text-accent-fg border-accent' : 'bg-surface border-rule text-ink-2'"
-              @click="data.visit_type = opt; if (opt === 'Primary') data.channel_partner = ''"
+              :class="customerSearchScope === opt ? 'bg-accent text-accent-fg border-accent' : 'bg-surface border-rule text-ink-2'"
+              @click="onCustomerScopeChanged(data, opt)"
             >
               {{ opt }}
             </button>
           </div>
-          <p class="text-xs text-ink-3 mt-1">Primary: a direct call on the prospect above. Secondary: a call made through, or about, a channel partner.</p>
-        </div>
 
-        <div v-if="data.party_type === 'Prospect' && data.visit_type === 'Secondary'">
+          <!-- Secondary customers are reached through their channel partner
+               first - picking the distributor narrows the Customer search
+               below to just that partner's own outlets, instead of searching
+               every Secondary customer in the system by name. This only
+               scopes the search; the visit's own visit_type/channel_partner
+               still come from the picked customer's own record in
+               onCustomerPicked, same as before. -->
           <CustomerPicker
-            label="Channel partner *"
+            v-if="data.party_type === 'Customer' && customerSearchScope === 'Secondary'"
+            label="Channel partner"
             :multiple="false"
             distributors-only
-            :model-value="data.channel_partner"
-            @update:model-value="data.channel_partner = $event"
+            :model-value="secondaryChannelPartnerScope"
+            @update:model-value="onSecondaryChannelPartnerScopeChanged(data, $event)"
           />
-          <p class="text-xs text-ink-3 mt-1">Required for a Secondary visit.</p>
-        </div>
-
-        <div v-for="f in beforeGeoFields" :key="f.key">
-          <label class="block text-sm font-display text-ink-2 mb-1">
-            {{ f.label }}
-            <span v-if="f.required" class="text-crit">*</span>
-            <span v-else class="text-ink-3 font-normal">(optional)</span>
-          </label>
-          <select
-            v-if="f.type === 'select'"
-            v-model="data[f.key]"
-            class="w-full h-[52px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm"
+          <CustomerPicker
+            v-if="data.party_type === 'Customer' && (customerSearchScope === 'Primary' || secondaryChannelPartnerScope)"
+            :multiple="false"
+            label="Customer"
+            :extra-filters="customerPickerFilters"
+            :model-value="data.customer"
+            @update:model-value="onCustomerPicked(data, $event)"
+          />
+          <p
+            v-else-if="data.party_type === 'Customer' && customerSearchScope === 'Secondary'"
+            class="text-xs text-ink-3"
           >
-            <option value="">Select…</option>
-            <option v-for="opt in f.options" :key="opt" :value="opt">{{ opt }}</option>
-          </select>
-          <input
-            v-else
-            v-model="data[f.key]"
-            :type="f.type || 'text'"
-            class="w-full h-[52px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm"
-          />
-        </div>
-
-        <!-- State/District/City as a cascading pick from the real geography
-             master (State/District/City doctypes) instead of free text -
-             matches the pattern Journey Plan's own trip form already uses,
-             and avoids a rep typing "Kolkatta" where the master says "Kolkata". -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <div>
-            <label class="block text-xs text-ink-3 mb-1">State</label>
-            <select
-              :value="data.state"
-              class="w-full h-[46px] rounded-[10px] border border-rule bg-surface px-2 text-sm"
-              @change="onStateChange(data, $event.target.value)"
-            >
-              <option value="">Select state</option>
-              <option v-for="s in states" :key="s.name" :value="s.state">{{ s.state }}</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs text-ink-3 mb-1">District</label>
-            <select
-              :value="data.district"
-              class="w-full h-[46px] rounded-[10px] border border-rule bg-surface px-2 text-sm disabled:opacity-50"
-              :disabled="!data.state"
-              @change="onDistrictChange(data, $event.target.value)"
-            >
-              <option value="">Select district</option>
-              <option v-for="d in districts" :key="d.name" :value="d.district">{{ d.district }}</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs text-ink-3 mb-1">City</label>
-            <select
-              v-model="data.city"
-              class="w-full h-[46px] rounded-[10px] border border-rule bg-surface px-2 text-sm disabled:opacity-50"
-              :disabled="!data.district"
-            >
-              <option value="">Select city</option>
-              <option v-for="c in cities" :key="c.name" :value="c.city">{{ c.city }}</option>
-            </select>
-          </div>
-        </div>
-
-        <div v-for="f in afterGeoFields" :key="f.key">
-          <label class="block text-sm font-display text-ink-2 mb-1">
-            {{ f.label }}
-            <span v-if="f.required" class="text-crit">*</span>
-            <span v-else class="text-ink-3 font-normal">(optional)</span>
-          </label>
-          <input
-            v-model="data[f.key]"
-            :type="f.type || 'text'"
-            class="w-full h-[52px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm"
-          />
-        </div>
-
-        <div v-if="data.party_type === 'Customer' && data.location">
-          <label class="block text-sm font-display text-ink-2 mb-1">Pin Location</label>
-          <PinDropMap v-model="pinLocation" />
-          <p class="text-xs text-ink-3 mt-1">
-            Tap to correct exactly where this outlet is - saved when you create the visit.
+            Pick a channel partner first…
           </p>
+          <div v-else-if="data.party_type === 'Prospect'">
+            <label class="block text-sm font-display text-ink-2 mb-1">Prospect name (if new)</label>
+            <input v-model="data.prospect_name" class="w-full h-[46px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm" />
+          </div>
+
+          <!-- Visit type sits right after who the visit is for, since it's
+               the next thing that decides what the rest of the form needs -
+               a Customer's Primary/Secondary status and channel partner are
+               fixed on that customer's own master record (Customer.customer_level
+               / custom_channel_partner), not something a rep chooses per
+               visit. Picking a different channel partner per visit would let
+               the same customer end up attributed to different partners across
+               visits, which the master data already has one answer for. -->
+          <p v-if="customerLoadError" class="text-xs text-crit bg-crit/10 border border-crit/30 rounded-xl p-3">
+            {{ customerLoadError }}
+          </p>
+
+          <div v-if="data.party_type === 'Customer' && data.customer">
+            <label class="block text-sm font-display text-ink-2 mb-1">Customer type</label>
+            <div class="rounded-[10px] border border-rule bg-surface-2 px-3 py-2 text-sm text-ink">
+              {{ data.visit_type || "Primary" }}
+              <span v-if="data.visit_type === 'Secondary'" class="text-ink-2">
+                · via {{ channelPartnerName || data.channel_partner }}
+              </span>
+            </div>
+          </div>
+
+          <div v-if="data.party_type === 'Prospect'">
+            <label class="block text-sm font-display text-ink-2 mb-1">Visit type <span class="text-crit">*</span></label>
+            <div class="flex gap-2">
+              <button
+                v-for="opt in ['Primary', 'Secondary']"
+                :key="opt"
+                type="button"
+                class="flex-1 py-2 rounded-[10px] text-sm font-display border"
+                :class="data.visit_type === opt ? 'bg-accent text-accent-fg border-accent' : 'bg-surface border-rule text-ink-2'"
+                @click="data.visit_type = opt; if (opt === 'Primary') data.channel_partner = ''"
+              >
+                {{ opt }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="data.party_type === 'Prospect' && data.visit_type === 'Secondary'">
+            <CustomerPicker
+              label="Channel partner *"
+              :multiple="false"
+              distributors-only
+              :model-value="data.channel_partner"
+              @update:model-value="data.channel_partner = $event"
+            />
+          </div>
         </div>
 
-        <!-- Mandatory GPS check-in, gating the rest of the wizard - see
-             onCheckIn's own comment for why this is where the draft first
-             gets created, rather than waiting for the form's final save. -->
+        <div class="space-y-2.5">
+          <div class="flex items-center gap-2 pb-1.5 border-b border-rule-soft">
+            <span class="w-5 h-5 rounded-full bg-accent-soft text-accent-ink flex items-center justify-center shrink-0"><Icon name="info" :size="11" /></span>
+            <p class="text-[11px] font-display font-semibold uppercase tracking-wide text-ink-2">Details</p>
+          </div>
+          <div v-for="f in beforeGeoFields" :key="f.key">
+            <label class="block text-sm font-display text-ink-2 mb-1">
+              {{ f.label }}
+              <span v-if="f.required" class="text-crit">*</span>
+              <span v-else class="text-ink-3 font-normal">(optional)</span>
+            </label>
+            <input
+              v-model="data[f.key]"
+              :type="f.type || 'text'"
+              class="w-full h-[46px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm"
+            />
+          </div>
+        </div>
+
+        <!-- Check-in stays right after party/details, before address - it
+             only ever needs party_type/customer/prospect_name/channel_partner
+             (see canAttemptCheckIn below), so nothing about it depends on
+             scrolling further down. -->
         <div
           v-if="canAttemptCheckIn(data)"
-          class="rounded-xl border p-4 space-y-2"
+          class="rounded-xl border p-3.5 space-y-2"
           :class="checkedIn ? 'border-accent bg-accent-soft' : 'border-warn/30 bg-warn/10'"
         >
           <p v-if="checkedIn" class="text-sm font-display font-medium text-accent-ink">
@@ -206,7 +167,7 @@
             <p v-if="geoError" class="text-xs text-crit">{{ geoError }}</p>
             <button
               type="button"
-              class="w-full h-[46px] rounded-[10px] bg-accent text-accent-fg text-sm font-display font-medium disabled:opacity-60"
+              class="w-full h-[44px] rounded-[10px] bg-accent text-accent-fg text-sm font-display font-medium disabled:opacity-60"
               :disabled="checkingIn"
               @click="onCheckIn(data)"
             >
@@ -214,11 +175,91 @@
             </button>
           </template>
         </div>
+
+        <div class="space-y-2.5">
+          <div class="flex items-center gap-2 pb-1.5 border-b border-rule-soft">
+            <span class="w-5 h-5 rounded-full bg-accent-soft text-accent-ink flex items-center justify-center shrink-0"><Icon name="map-pin" :size="11" /></span>
+            <p class="text-[11px] font-display font-semibold uppercase tracking-wide text-ink-2">Address</p>
+          </div>
+          <div v-for="f in addressLineFields" :key="f.key">
+            <label class="block text-sm font-display text-ink-2 mb-1">
+              {{ f.label }}
+              <span class="text-ink-3 font-normal">(optional)</span>
+            </label>
+            <input
+              v-model="data[f.key]"
+              type="text"
+              class="w-full h-[46px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm"
+            />
+          </div>
+
+          <!-- State/District/City as a cascading pick from the real geography
+               master (State/District/City doctypes) instead of free text -
+               matches the pattern Journey Plan's own trip form already uses,
+               and avoids a rep typing "Kolkatta" where the master says "Kolkata". -->
+          <div class="grid grid-cols-1 gap-2.5">
+            <div>
+              <label class="block text-sm font-display text-ink-2 mb-1">State</label>
+              <select
+                :value="data.state"
+                class="w-full h-[46px] rounded-[10px] border border-rule bg-surface px-3 text-sm"
+                @change="onStateChange(data, $event.target.value)"
+              >
+                <option value="">Select…</option>
+                <option v-for="s in states" :key="s.name" :value="s.state">{{ s.state }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-display text-ink-2 mb-1">District</label>
+              <select
+                :value="data.district"
+                class="w-full h-[46px] rounded-[10px] border border-rule bg-surface px-3 text-sm disabled:opacity-50"
+                :disabled="!data.state"
+                @change="onDistrictChange(data, $event.target.value)"
+              >
+                <option value="">Select…</option>
+                <option v-for="d in districts" :key="d.name" :value="d.district">{{ d.district }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-display text-ink-2 mb-1">City</label>
+              <select
+                v-model="data.city"
+                class="w-full h-[46px] rounded-[10px] border border-rule bg-surface px-3 text-sm disabled:opacity-50"
+                :disabled="!data.district"
+              >
+                <option value="">Select…</option>
+                <option v-for="c in cities" :key="c.name" :value="c.city">{{ c.city }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div v-for="f in afterGeoFields" :key="f.key">
+            <label class="block text-sm font-display text-ink-2 mb-1">
+              {{ f.label }}
+              <span v-if="f.required" class="text-crit">*</span>
+              <span v-else class="text-ink-3 font-normal">(optional)</span>
+            </label>
+            <input
+              v-model="data[f.key]"
+              :type="f.type || 'text'"
+              class="w-full h-[46px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm"
+            />
+          </div>
+
+          <div v-if="data.party_type === 'Customer' && data.location">
+            <label class="block text-sm font-display text-ink-2 mb-1">Pin Location</label>
+            <PinDropMap v-model="pinLocation" />
+            <p class="text-xs text-ink-3 mt-1">
+              Tap to correct exactly where this outlet is - saved when you create the visit.
+            </p>
+          </div>
+        </div>
       </div>
     </template>
 
     <template #step-1="{ data }">
-      <div class="bg-surface rounded-2xl p-4 space-y-4">
+      <div class="bg-surface rounded-2xl border border-rule p-3.5 space-y-3">
         <div>
           <label class="block text-sm font-display text-ink-2 mb-1">Order status <span class="text-crit">*</span></label>
           <div class="flex gap-2">
@@ -271,172 +312,177 @@
       </div>
     </template>
 
-    <!-- Products pitched - mirrors the Flutter app's "Added Products" list:
-         which items were pitched, in what segment, and who the customer
-         currently buys them from. Entirely optional: a visit with no
-         pitch (e.g. a pure relationship call) is a normal outcome. -->
+    <!-- Products pitched + Consumption merged into one step - both are
+         optional repeaters with no validation that couples them to
+         anything else, so splitting them across two separate screens
+         only added an extra Next tap for no real benefit. -->
     <template #step-2="{ data }">
-      <div class="space-y-3">
-        <p v-if="!data.pitched_items.length" class="text-sm text-ink-3 px-1">
-          No products pitched yet. This is optional - add one below if you showed the customer anything.
-        </p>
-
-        <div v-for="(row, i) in data.pitched_items" :key="i" class="bg-surface rounded-2xl border border-rule p-4 space-y-3">
-          <div class="flex items-center justify-between pb-1 border-b border-rule-soft">
-            <span class="inline-flex items-center gap-2 text-sm font-display font-semibold text-ink">
-              <span class="w-6 h-6 rounded-full bg-accent-soft text-accent-ink text-xs font-bold flex items-center justify-center shrink-0">{{ i + 1 }}</span>
-              Product
-            </span>
-            <button
-              type="button"
-              class="w-8 h-8 rounded-full flex items-center justify-center text-ink-3 active:bg-surface-2"
-              aria-label="Remove product"
-              @click="data.pitched_items.splice(i, 1)"
-            >
-              <Icon name="close" :size="14" />
-            </button>
+      <div class="bg-surface rounded-2xl border border-rule p-3.5 space-y-4">
+        <div class="space-y-2.5">
+          <div class="flex items-center gap-2 pb-1.5 border-b border-rule-soft">
+            <span class="w-5 h-5 rounded-full bg-accent-soft text-accent-ink flex items-center justify-center shrink-0"><Icon name="order" :size="11" /></span>
+            <p class="text-[11px] font-display font-semibold uppercase tracking-wide text-ink-2">Products pitched</p>
+          </div>
+          <div v-if="!data.pitched_items.length" class="flex items-center gap-2.5 rounded-xl border border-dashed border-rule px-3 py-2.5">
+            <Icon name="order" :size="16" class="text-ink-3 shrink-0" />
+            <p class="text-xs text-ink-3">Optional - add one if you showed the customer anything.</p>
           </div>
 
-          <div>
-            <label class="block text-xs text-ink-3 mb-1">Segment <span class="text-crit">*</span></label>
-            <select
-              :value="row.segment"
-              class="w-full h-[42px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm"
-              @change="onSegmentChanged(row, $event.target.value)"
-            >
-              <option value="">Select segment</option>
-              <option v-for="s in segments" :key="s.name" :value="s.name">{{ s.name }}</option>
-            </select>
-          </div>
-
-          <ItemPicker
-            label="Item"
-            :model-value="row.item_code"
-            :display="row.item_code ? `${row.item_name || row.item_code}` : ''"
-            :segment="row.segment"
-            segment-required
-            @update:model-value="row.item_code = $event"
-            @picked="onItemPicked(row, $event)"
-          />
-
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-xs text-ink-3 mb-1">Qty</label>
-              <input
-                v-model.number="row.qty"
-                type="number"
-                min="0"
-                step="0.01"
-                class="w-full h-[42px] rounded-[10px] border border-rule bg-surface text-ink px-3 text-sm"
-              />
+          <div v-for="(row, i) in data.pitched_items" :key="i" class="bg-surface-2 rounded-xl p-3 space-y-2.5">
+            <div class="flex items-center justify-between pb-1 border-b border-rule-soft">
+              <span class="inline-flex items-center gap-2 text-sm font-display font-semibold text-ink">
+                <span class="w-6 h-6 rounded-full bg-accent-soft text-accent-ink text-xs font-bold flex items-center justify-center shrink-0">{{ i + 1 }}</span>
+                Product
+              </span>
+              <button
+                type="button"
+                class="w-8 h-8 rounded-full flex items-center justify-center text-ink-3 active:bg-surface"
+                aria-label="Remove product"
+                @click="data.pitched_items.splice(i, 1)"
+              >
+                <Icon name="close" :size="14" />
+              </button>
             </div>
+
             <div>
-              <label class="block text-xs text-ink-3 mb-1">UOM</label>
-              <input
-                :value="row.uom"
-                readonly
-                placeholder="From item"
-                class="w-full h-[42px] rounded-[10px] border border-rule bg-ground px-3 text-sm text-ink-3"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-xs text-ink-3 mb-1">Currently using brand (optional)</label>
-            <NamePicker
-              v-model="row.competitor"
-              placeholder="Search competitor…"
-              :fetcher="searchCompetitors"
-            />
-          </div>
-        </div>
-
-        <button
-          type="button"
-          class="w-full py-2.5 rounded-xl border border-dashed border-rule text-sm font-display text-ink-2"
-          @click="data.pitched_items.push({ item_code: '', item_name: '', qty: 1, uom: '', segment: '', competitor: '' })"
-        >
-          + Add pitched product
-        </button>
-      </div>
-    </template>
-
-    <!-- Current consumption - mirrors the Flutter app's per-segment
-         "Monthly Consumption" entry. Also optional. -->
-    <template #step-3="{ data }">
-      <div class="space-y-3">
-        <p v-if="!data.consumption.length" class="text-sm text-ink-3 px-1">
-          No consumption entries yet. This is optional - add one below if the customer shared what they currently use monthly.
-        </p>
-
-        <div v-for="(row, i) in data.consumption" :key="i" class="bg-surface rounded-2xl border border-rule p-4 space-y-3">
-          <div class="flex items-center justify-between pb-1 border-b border-rule-soft">
-            <span class="inline-flex items-center gap-2 text-sm font-display font-semibold text-ink">
-              <span class="w-6 h-6 rounded-full bg-accent-soft text-accent-ink text-xs font-bold flex items-center justify-center shrink-0">{{ i + 1 }}</span>
-              Entry
-            </span>
-            <button
-              type="button"
-              class="w-8 h-8 rounded-full flex items-center justify-center text-ink-3 active:bg-surface-2"
-              aria-label="Remove entry"
-              @click="data.consumption.splice(i, 1)"
-            >
-              <Icon name="close" :size="14" />
-            </button>
-          </div>
-
-          <div>
-            <label class="block text-xs text-ink-3 mb-1">Segment</label>
-            <select v-model="row.segment" class="w-full h-[42px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm">
-              <option value="">Select segment</option>
-              <option v-for="s in segments" :key="s.name" :value="s.name">{{ s.name }}</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="block text-xs text-ink-3 mb-1">Product <span class="text-crit">*</span></label>
-            <input
-              v-model="row.product_name"
-              class="w-full h-[42px] rounded-[10px] border border-rule bg-surface text-ink px-3 text-sm"
-              placeholder="e.g. Rival Improver"
-            />
-          </div>
-
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-xs text-ink-3 mb-1">Monthly qty</label>
-              <input
-                v-model.number="row.monthly_qty"
-                type="number"
-                min="0"
-                step="0.01"
-                class="w-full h-[42px] rounded-[10px] border border-rule bg-surface text-ink px-3 text-sm"
-              />
-            </div>
-            <div>
-              <label class="block text-xs text-ink-3 mb-1">UOM</label>
-              <select v-model="row.uom" class="w-full h-[42px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm">
-                <option value="">Select…</option>
-                <option v-for="u in uoms" :key="u.name" :value="u.name">{{ u.name }}</option>
+              <label class="block text-xs text-ink-3 mb-1">Segment <span class="text-crit">*</span></label>
+              <select
+                :value="row.segment"
+                class="w-full h-[42px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm"
+                @change="onSegmentChanged(row, $event.target.value)"
+              >
+                <option value="">Select segment</option>
+                <option v-for="s in segments" :key="s.name" :value="s.name">{{ s.name }}</option>
               </select>
             </div>
+
+            <ItemPicker
+              label="Item"
+              :model-value="row.item_code"
+              :display="row.item_code ? `${row.item_name || row.item_code}` : ''"
+              :segment="row.segment"
+              segment-required
+              @update:model-value="row.item_code = $event"
+              @picked="onItemPicked(row, $event)"
+            />
+
+            <div class="grid grid-cols-1 gap-2.5">
+              <div>
+                <label class="block text-xs text-ink-3 mb-1">Qty</label>
+                <input
+                  v-model.number="row.qty"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="w-full h-[42px] rounded-[10px] border border-rule bg-surface text-ink px-3 text-sm"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-ink-3 mb-1">UOM</label>
+                <input
+                  :value="row.uom"
+                  readonly
+                  placeholder="From item"
+                  class="w-full h-[42px] rounded-[10px] border border-rule bg-ground px-3 text-sm text-ink-3"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs text-ink-3 mb-1">Currently using brand (optional)</label>
+              <NamePicker
+                v-model="row.competitor"
+                placeholder="Search competitor…"
+                :fetcher="searchCompetitors"
+              />
+            </div>
           </div>
+
+          <button
+            type="button"
+            class="w-full py-2 rounded-xl border border-dashed border-rule text-sm font-display text-ink-2"
+            @click="data.pitched_items.push({ item_code: '', item_name: '', qty: 1, uom: '', segment: '', competitor: '' })"
+          >
+            + Add pitched product
+          </button>
         </div>
 
-        <button
-          type="button"
-          class="w-full py-2.5 rounded-xl border border-dashed border-rule text-sm font-display text-ink-2"
-          @click="data.consumption.push({ segment: '', product_name: '', monthly_qty: 0, uom: '' })"
-        >
-          + Add consumption entry
-        </button>
+        <div class="space-y-2.5">
+          <div class="flex items-center gap-2 pb-1.5 border-b border-rule-soft">
+            <span class="w-5 h-5 rounded-full bg-accent-soft text-accent-ink flex items-center justify-center shrink-0"><Icon name="trending-up" :size="11" /></span>
+            <p class="text-[11px] font-display font-semibold uppercase tracking-wide text-ink-2">Consumption</p>
+          </div>
+          <div v-if="!data.consumption.length" class="flex items-center gap-2.5 rounded-xl border border-dashed border-rule px-3 py-2.5">
+            <Icon name="trending-up" :size="16" class="text-ink-3 shrink-0" />
+            <p class="text-xs text-ink-3">Optional - add one if the customer shared what they use monthly.</p>
+          </div>
+
+          <div v-for="(row, i) in data.consumption" :key="i" class="bg-surface-2 rounded-xl p-3 space-y-2.5">
+            <div class="flex items-center justify-between pb-1 border-b border-rule-soft">
+              <span class="inline-flex items-center gap-2 text-sm font-display font-semibold text-ink">
+                <span class="w-6 h-6 rounded-full bg-accent-soft text-accent-ink text-xs font-bold flex items-center justify-center shrink-0">{{ i + 1 }}</span>
+                Entry
+              </span>
+              <button
+                type="button"
+                class="w-8 h-8 rounded-full flex items-center justify-center text-ink-3 active:bg-surface"
+                aria-label="Remove entry"
+                @click="data.consumption.splice(i, 1)"
+              >
+                <Icon name="close" :size="14" />
+              </button>
+            </div>
+
+            <div>
+              <label class="block text-xs text-ink-3 mb-1">Segment</label>
+              <select v-model="row.segment" class="w-full h-[42px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm">
+                <option value="">Select segment</option>
+                <option v-for="s in segments" :key="s.name" :value="s.name">{{ s.name }}</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs text-ink-3 mb-1">Product <span class="text-crit">*</span></label>
+              <input
+                v-model="row.product_name"
+                class="w-full h-[42px] rounded-[10px] border border-rule bg-surface text-ink px-3 text-sm"
+                placeholder="e.g. Rival Improver"
+              />
+            </div>
+
+            <div class="grid grid-cols-1 gap-2.5">
+              <div>
+                <label class="block text-xs text-ink-3 mb-1">Monthly qty</label>
+                <input
+                  v-model.number="row.monthly_qty"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="w-full h-[42px] rounded-[10px] border border-rule bg-surface text-ink px-3 text-sm"
+                />
+              </div>
+              <div>
+                <label class="block text-xs text-ink-3 mb-1">UOM</label>
+                <select v-model="row.uom" class="w-full h-[42px] rounded-[10px] border border-rule bg-surface text-ink appearance-none px-3 text-sm">
+                  <option value="">Select…</option>
+                  <option v-for="u in uoms" :key="u.name" :value="u.name">{{ u.name }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            class="w-full py-2 rounded-xl border border-dashed border-rule text-sm font-display text-ink-2"
+            @click="data.consumption.push({ segment: '', product_name: '', monthly_qty: 0, uom: '' })"
+          >
+            + Add consumption entry
+          </button>
+        </div>
       </div>
     </template>
 
-    <!-- Trial - mirrors mohan_impex's CustomerVisitManagement.trial_plan():
-         checking this and listing items materialises a Field Trial Plan per
-         item once the visit is saved, linked back to this visit. -->
-    <template #step-4="{ data }">
+    <template #step-3="{ data }">
       <div class="space-y-3">
         <label class="flex items-center gap-2 text-sm bg-surface rounded-2xl p-4">
           <input type="checkbox" v-model="data.has_trial_plan" true-value="1" false-value="0" />
@@ -444,9 +490,10 @@
         </label>
 
         <template v-if="data.has_trial_plan === '1'">
-          <p v-if="!data.trial_items.length" class="text-sm text-ink-3 px-1">
-            Add the item(s) left with the customer to try.
-          </p>
+          <div v-if="!data.trial_items.length" class="flex items-center gap-2.5 rounded-xl border border-dashed border-rule px-3 py-2.5">
+            <Icon name="trial" :size="16" class="text-ink-3 shrink-0" />
+            <p class="text-xs text-ink-3">Add the item(s) left with the customer to try.</p>
+          </div>
 
           <div v-for="(row, i) in data.trial_items" :key="i" class="bg-surface rounded-2xl border border-rule p-4 space-y-3">
             <div class="flex items-center justify-between pb-1 border-b border-rule-soft">
@@ -472,7 +519,7 @@
               @picked="onItemPicked(row, $event)"
             />
 
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-1 gap-2.5">
               <div>
                 <label class="block text-xs text-ink-3 mb-1">Qty</label>
                 <input
@@ -506,11 +553,7 @@
       </div>
     </template>
 
-    <!-- Shop photo - optional. Uploaded ahead of the visit actually being
-         created (there's no docname yet on a new-visit form), then the
-         resulting file_url rides along in the create payload like any
-         other field. -->
-    <template #step-5="{ data }">
+    <template #step-4="{ data }">
       <FileUpload
         v-model="data.shop_photo"
         doctype="Field Visit"
@@ -524,7 +567,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue"
+import { computed, onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 import { call } from "frappe-ui"
 import FormView from "@/components/FormView.vue"
@@ -661,8 +704,27 @@ const channelPartnerName = ref("")
 // the picked customer's own record, in onCustomerPicked below).
 const customerSearchScope = ref("Primary")
 
+// Also UI-only: which distributor's own outlets the Customer search is
+// narrowed to when customerSearchScope is "Secondary". Never sent to the
+// server - the visit's real channel_partner still comes from the picked
+// customer's own record, same as customerSearchScope above.
+const secondaryChannelPartnerScope = ref("")
+
+const customerPickerFilters = computed(() => {
+  if (customerSearchScope.value === "Secondary" && secondaryChannelPartnerScope.value) {
+    return { customer_level: "Secondary", custom_channel_partner: secondaryChannelPartnerScope.value }
+  }
+  return { customer_level: customerSearchScope.value }
+})
+
 function onCustomerScopeChanged(data, scope) {
   customerSearchScope.value = scope
+  secondaryChannelPartnerScope.value = ""
+  onCustomerPicked(data, "")
+}
+
+function onSecondaryChannelPartnerScopeChanged(data, channelPartner) {
+  secondaryChannelPartnerScope.value = channelPartner
   onCustomerPicked(data, "")
 }
 
@@ -791,6 +853,10 @@ const beforeGeoFields = [
   { key: "outlet_name", label: "Outlet name", type: "text", required: true },
   { key: "contact_number", label: "Contact number", type: "text" },
   { key: "visit_date", label: "Visit date", type: "date", required: true },
+]
+// Rendered on the "Location" step instead of here - see that step's own
+// comment for why address detail is worth splitting out of the party step.
+const addressLineFields = [
   { key: "address_line1", label: "Address line 1", type: "text" },
   { key: "address_line2", label: "Address line 2", type: "text" },
 ]
@@ -874,7 +940,11 @@ async function onDistrictChange(data, value) {
 
 const steps = [
   {
-    title: "Party & location",
+    // Party, check-in, and address detail merged into one step - address
+    // has no validation of its own and check-in only ever needs the party
+    // fields above it (see canAttemptCheckIn), so splitting them across
+    // two screens only cost an extra Next tap, not any real clarity.
+    title: "Visit details",
     fields: [
       { key: "party_type", label: "Party type", type: "select", options: ["Customer", "Prospect"], required: true },
       { key: "customer", label: "Customer (if existing)", type: "text" },
@@ -905,11 +975,10 @@ const steps = [
     },
   },
   {
-    title: "Products pitched",
-    fields: [],
-  },
-  {
-    title: "Consumption",
+    // Products pitched and Consumption merged - both optional repeaters
+    // with no validation coupling them to anything, so one screen with
+    // two labeled sections covers both without an extra step in between.
+    title: "Products & consumption",
     fields: [],
   },
   {

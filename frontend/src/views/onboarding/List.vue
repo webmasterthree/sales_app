@@ -20,7 +20,7 @@ const config = {
   ],
   defaultTab: "pending",
   filters: [
-    { key: "business_type", label: "Type", options: ["Registered", "Unregistered"] },
+    { key: "business_type", label: "Type", options: ["Registered", "UnRegistered"] },
   ],
   cardTitle: (row) => row.customer_name || row.name,
   cardSubtitle: (row) => row.business_type || "",

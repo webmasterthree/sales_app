@@ -79,9 +79,13 @@ const routes = [
   { path: "/schemes", name: "SchemeList", component: () => import("@/views/schemes/List.vue") },
   { path: "/schemes/:name", name: "SchemeDetail", component: () => import("@/views/schemes/Detail.vue"), props: true },
 
-  // Reports (only Sales Target has a real backend endpoint - see Reports.vue)
+  // Reports
   { path: "/reports", name: "Reports", component: () => import("@/views/Reports.vue") },
   { path: "/reports/sales-target", name: "SalesTargetReport", component: () => import("@/views/reports/SalesTargetReport.vue") },
+  { path: "/reports/coverage", name: "CustomerCoverageReport", component: () => import("@/views/reports/CustomerCoverageReport.vue") },
+  { path: "/reports/collections", name: "CollectionsReport", component: () => import("@/views/reports/CollectionsReport.vue") },
+  { path: "/reports/collections/:customer/collect", name: "CollectPayment", component: () => import("@/views/reports/CollectPayment.vue"), props: true },
+  { path: "/reports/onboarding-funnel", name: "OnboardingFunnelReport", component: () => import("@/views/reports/OnboardingFunnelReport.vue") },
 
   // Approval queue (for managers)
   { path: "/approvals", name: "ApprovalQueue", component: () => import("@/views/approvals/Queue.vue") },

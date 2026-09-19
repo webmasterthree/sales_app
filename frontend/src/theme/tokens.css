@@ -15,13 +15,13 @@
   --fs-ink-3: #868C94;
   --fs-rule: #E1E4E8;
   --fs-rule-soft: #EAECEF;
-  /* The mockup's neon cyan (#29F1C3) measures ~1.4:1 on white - unusable as
-     light-mode text/icon color. Deepened to a teal that keeps the same hue
-     family and clears WCAG AA (5.1:1 on white) as both text and a fill. */
-  --fs-accent: #0F8A73;
-  --fs-accent-soft: #E1F5F0;
+  /* Purple accent, picked to replace the original teal/cyan - #534AB7
+     clears WCAG AA on white (~5.4:1) as both text and a fill, same
+     standard the teal it replaces was held to. */
+  --fs-accent: #534AB7;
+  --fs-accent-soft: #EEEDFE;
   --fs-accent-fg: #FFFFFF;
-  --fs-accent-ink: #0F8A73;
+  --fs-accent-ink: #534AB7;
   /* Secondary accent (the mockup's coral dot/sparkline) - used sparingly,
      same role --fs-chart played before: one accent color for a second
      data series or a highlighted secondary module, never for primary CTAs. */
@@ -49,12 +49,12 @@
   --fs-ink-3: #746F82;
   --fs-rule: #2C2438;
   --fs-rule-soft: #251F30;
-  --fs-accent: #29F1C3;
-  --fs-accent-soft: #16241F;
-  /* near-black text on the neon cyan fill (~15:1) - the mockup's own CTA
-     treatment, not an inverted-light-mode-style foreground. */
-  --fs-accent-fg: #0F0B17;
-  --fs-accent-ink: #29F1C3;
+  --fs-accent: #7F77DD;
+  --fs-accent-soft: #241D3D;
+  /* white text on the mid-tone purple fill (~7:1) - readable without
+     needing the near-black-on-neon treatment the previous cyan fill used. */
+  --fs-accent-fg: #FFFFFF;
+  --fs-accent-ink: #7F77DD;
   --fs-chart: #FF5C7A;
   --fs-crit: #FF5C7A;
   --fs-warn: #F0B65E;
@@ -62,8 +62,8 @@
   /* the mockup's own check-in/out button is accent-filled, not the
      neutral near-black/white "secondary action" fill light mode uses -
      mirrored here rather than inventing a third fill color. */
-  --fs-action2: #29F1C3;
-  --fs-action2-fg: #0F0B17;
+  --fs-action2: #7F77DD;
+  --fs-action2-fg: #FFFFFF;
   --fs-shadow: 0 8px 20px rgba(0,0,0,.5), 0 2px 4px rgba(0,0,0,.4);
 }
 
@@ -78,16 +78,16 @@
     --fs-ink-3: #746F82;
     --fs-rule: #2C2438;
     --fs-rule-soft: #251F30;
-    --fs-accent: #29F1C3;
-    --fs-accent-soft: #16241F;
-    --fs-accent-fg: #0F0B17;
-    --fs-accent-ink: #29F1C3;
+    --fs-accent: #7F77DD;
+    --fs-accent-soft: #241D3D;
+    --fs-accent-fg: #FFFFFF;
+    --fs-accent-ink: #7F77DD;
     --fs-chart: #FF5C7A;
     --fs-crit: #FF5C7A;
     --fs-warn: #F0B65E;
     --fs-good: #4ED191;
-    --fs-action2: #29F1C3;
-    --fs-action2-fg: #0F0B17;
+    --fs-action2: #7F77DD;
+    --fs-action2-fg: #FFFFFF;
     --fs-shadow: 0 8px 20px rgba(0,0,0,.5), 0 2px 4px rgba(0,0,0,.4);
   }
 }

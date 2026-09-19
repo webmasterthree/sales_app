@@ -141,8 +141,22 @@ def build_filters(config: ListConfig, form, user: str | None = None) -> tuple[di
     return filters, or_filters
 
 
-def paginated_list(config: ListConfig, form=None, user: str | None = None) -> dict:
-    """Run a scoped, searchable, paginated list."""
+def paginated_list(
+    config: ListConfig,
+    form=None,
+    user: str | None = None,
+    extra_filters: dict | None = None,
+) -> dict:
+    """Run a scoped, searchable, paginated list.
+
+    ``extra_filters`` is for scoping a caller can't express through
+    ``ListConfig`` itself - e.g. distributor_list's "has a Secondary
+    customer in my territory" check, which filters on a *different*
+    doctype's rows than the one being listed, so the generic
+    ``territory_field`` mechanism (which only ever looks at the listed
+    doctype's own field) can't express it. Applied after every other
+    filter, so it can only narrow a request, never loosen one.
+    """
     form = frappe._dict(form if form is not None else (frappe.form_dict or {}))
     user = user or frappe.session.user
 
@@ -153,6 +167,8 @@ def paginated_list(config: ListConfig, form=None, user: str | None = None) -> di
 
     page, size, offset = _pagination(form)
     filters, or_filters = build_filters(config, form, user)
+    if extra_filters:
+        filters.update(extra_filters)
     order_by = config.resolve_order_by(form.get("order_by"))
 
     records = frappe.get_all(

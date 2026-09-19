@@ -205,7 +205,7 @@
             @picked="onVariantPicked(row, $event)"
           />
 
-          <div v-if="row.item_code" class="grid grid-cols-2 gap-2">
+          <div v-if="row.item_code" class="grid grid-cols-1 gap-2.5">
             <div>
               <label class="block text-xs text-ink-3 mb-1">Qty</label>
               <input

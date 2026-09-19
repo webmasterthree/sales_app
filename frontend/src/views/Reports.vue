@@ -56,6 +56,51 @@
         </div>
       </RouterLink>
 
+      <RouterLink
+        :to="{ name: 'CustomerCoverageReport' }"
+        class="block bg-surface rounded-2xl border border-rule p-4 active:opacity-80"
+      >
+        <div class="flex items-center gap-3">
+          <span class="w-10 h-10 rounded-full bg-accent-soft text-accent-ink flex items-center justify-center shrink-0">
+            <Icon name="customer" :size="18" />
+          </span>
+          <div class="min-w-0">
+            <p class="font-display font-semibold text-ink">Customer Coverage</p>
+            <p class="text-xs text-ink-2">Which of your customers haven't been visited lately</p>
+          </div>
+        </div>
+      </RouterLink>
+
+      <RouterLink
+        :to="{ name: 'CollectionsReport' }"
+        class="block bg-surface rounded-2xl border border-rule p-4 active:opacity-80"
+      >
+        <div class="flex items-center gap-3">
+          <span class="w-10 h-10 rounded-full bg-accent-soft text-accent-ink flex items-center justify-center shrink-0">
+            <Icon name="report" :size="18" />
+          </span>
+          <div class="min-w-0">
+            <p class="font-display font-semibold text-ink">Collections</p>
+            <p class="text-xs text-ink-2">Outstanding balance across your customers, ranked by amount owed</p>
+          </div>
+        </div>
+      </RouterLink>
+
+      <RouterLink
+        :to="{ name: 'OnboardingFunnelReport' }"
+        class="block bg-surface rounded-2xl border border-rule p-4 active:opacity-80"
+      >
+        <div class="flex items-center gap-3">
+          <span class="w-10 h-10 rounded-full bg-accent-soft text-accent-ink flex items-center justify-center shrink-0">
+            <Icon name="customer" :size="18" />
+          </span>
+          <div class="min-w-0">
+            <p class="font-display font-semibold text-ink">Onboarding Funnel</p>
+            <p class="text-xs text-ink-2">New customer requests - pending, approved, rejected, and how long each took</p>
+          </div>
+        </div>
+      </RouterLink>
+
       <div
         v-for="tile in unavailableTiles"
         :key="tile.title"
@@ -84,11 +129,6 @@ const unavailableTiles = [
     title: "Trial Target",
     icon: "demo",
     reason: "Not available yet - there is no demo target set in the backend to report against.",
-  },
-  {
-    title: "New Wins",
-    icon: "customer",
-    reason: "Not available yet - nothing in the backend tracks newly won customers.",
   },
 ]
 </script>

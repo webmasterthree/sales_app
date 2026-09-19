@@ -297,6 +297,19 @@ fixtures = [
 		],
 	},
 	{
+		# Payment Entry (native ERPNext) ships permission for Accounts roles
+		# only - a rep recording a collection in the field would 403 on
+		# insert/submit without this, the same gap every other transactional
+		# doctype above had before its own grant. No cancel/amend - a
+		# mistaken collection is corrected back at the office, not reversed
+		# from the field.
+		"dt": "Custom DocPerm",
+		"filters": [
+			["parent", "=", "Payment Entry"],
+			["role", "=", "Sales Executive App"],
+		],
+	},
+	{
 		# The real Journey Plan approval chain (Pending -> ASM Approved ->
 		# Approved, with Reject/revise branches) - originally hand-built in
 		# Desk on production only, so a fresh site (including this bench's

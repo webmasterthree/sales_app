@@ -132,29 +132,25 @@ def _territory_field(doctype: str) -> str:
 # ---------------------------------------------------------------- sales target
 
 
-@frappe.whitelist()
-def sales_target(user: str | None = None) -> dict:
-    """This rep's sales target for the current month versus what they have
-    actually billed, read from ERPNext's own `Sales Person` / `Target
-    Detail` / `Monthly Distribution` records - the app is a reader of this
-    data, not a parallel system (the same principle behind `scoreboard()`
-    reading submitted documents rather than keeping its own counters).
+def _target_context(user: str | None = None):
+    """(employee, annual_target, distribution_id), or None when this rep has
+    no real target to measure against. Shared by sales_target and
+    sales_target_history so a trend can never silently use a different
+    annual figure than the single-month view does.
 
-    Returns a percent only when there is a real target to measure against;
-    the caller must treat an absent target as "nothing to show" rather than
-    defaulting to 0%, which would read as "0% of goal" instead of "no goal
-    set" - two very different facts.
+    Same as sales_target always assumed: the annual target found here is
+    treated as constant across every month in a requested range. A real
+    Target Detail is scoped to one fiscal year, so a range spanning a
+    fiscal-year boundary would be wrong here the same way it already would
+    have been - not a new gap introduced by adding history.
     """
-    user = user or frappe.session.user
     employee = _employee(user)
-    empty = {"has_target": False, "target_amount": 0, "achieved_amount": 0,
-             "percent": 0, "month": None}
     if not employee:
-        return empty
+        return None
 
     sales_person = frappe.db.get_value("Sales Person", {"employee": employee}, "name")
     if not sales_person:
-        return empty
+        return None
 
     targets = frappe.get_all(
         "Target Detail", filters={"parent": sales_person, "parenttype": "Sales Person"},
@@ -162,12 +158,15 @@ def sales_target(user: str | None = None) -> dict:
     )
     annual_target = sum(flt(t.target_amount) for t in targets)
     if not annual_target:
-        return empty
+        return None
 
-    today = getdate(nowdate())
-    month_name = today.strftime("%B")
     distribution_id = next((t.distribution_id for t in targets if t.distribution_id), None)
+    return employee, annual_target, distribution_id
 
+
+def _monthly_target(annual_target: float, distribution_id: str | None, month_name: str) -> float:
+    """One month's slice of an annual target - an even 12-way split, unless
+    a Monthly Distribution gives that month its own percentage."""
     monthly_target = annual_target / 12
     if distribution_id:
         pct = frappe.db.get_value(
@@ -177,25 +176,89 @@ def sales_target(user: str | None = None) -> dict:
         )
         if pct:
             monthly_target = annual_target * flt(pct) / 100
+    return monthly_target
 
-    from_date = get_first_day(nowdate())
-    to_date = get_last_day(nowdate())
+
+def _target_vs_achieved(employee: str, annual_target: float, distribution_id: str | None,
+                         month_date) -> dict:
+    month_name = month_date.strftime("%B")
+    monthly_target = _monthly_target(annual_target, distribution_id, month_name)
+
+    from_date = get_first_day(month_date)
+    to_date = get_last_day(month_date)
     achieved = _orders_by_employee(from_date, to_date).get(employee, {}).get("value", 0.0)
 
     percent = round((achieved / monthly_target) * 100) if monthly_target else 0
     return {
-        "has_target": True,
         # Rounded here, at the source, rather than left to whichever caller
         # happens to format it - a Monthly Distribution's percentage_allocation
         # is a stored decimal (e.g. 100/12 = 8.333...%), so the raw computed
         # amount is very rarely a clean rupee figure even when the underlying
         # target obviously should be (an even 12-way split of ₹5,40,000 comes
         # back as ₹44,999.999998, not ₹45,000, without this).
+        "month": month_name,
+        "year": month_date.year,
+        "label": month_date.strftime("%b %Y"),
         "target_amount": round(monthly_target, 2),
         "achieved_amount": round(achieved, 2),
         "percent": min(percent, 999),  # cap the display, not the underlying fact of over-achieving
-        "month": month_name,
     }
+
+
+@frappe.whitelist()
+def sales_target(user: str | None = None) -> dict:
+    """This rep's sales target for the current month versus what they have
+    actually billed, read from ERPNext's own Sales Person / Target
+    Detail / Monthly Distribution records - the app is a reader of this
+    data, not a parallel system (the same principle behind scoreboard()
+    reading submitted documents rather than keeping its own counters).
+
+    Returns a percent only when there is a real target to measure against;
+    the caller must treat an absent target as "nothing to show" rather than
+    defaulting to 0%, which would read as "0% of goal" instead of "no goal
+    set" - two very different facts.
+    """
+    empty = {"has_target": False, "target_amount": 0, "achieved_amount": 0,
+             "percent": 0, "month": None}
+    ctx = _target_context(user)
+    if not ctx:
+        return empty
+
+    employee, annual_target, distribution_id = ctx
+    result = _target_vs_achieved(employee, annual_target, distribution_id, getdate(nowdate()))
+    result["has_target"] = True
+    return result
+
+
+@frappe.whitelist()
+def sales_target_history(user: str | None = None, months: int = 6) -> dict:
+    """The last N months (oldest first) of target vs. achieved, for the
+    trend view under Sales Target - a single snapshot can't tell a rep
+    whether they're improving. Reuses _target_vs_achieved, the exact same
+    per-month computation sales_target itself uses, over a range instead
+    of one point, so the two views can never drift apart.
+    """
+    months = max(1, min(cint(months) or 6, 12))
+    ctx = _target_context(user)
+    if not ctx:
+        return {"has_target": False, "months": []}
+
+    employee, annual_target, distribution_id = ctx
+    first_of_this_month = get_first_day(nowdate())
+
+    out = []
+    for i in range(months - 1, -1, -1):
+        # Walk back i whole months from the first of the current month -
+        # anchoring on day 1 avoids the usual "the 31st has no March 31
+        # equivalent in February" calendar-arithmetic trap.
+        year, month = first_of_this_month.year, first_of_this_month.month - i
+        while month <= 0:
+            month += 12
+            year -= 1
+        month_date = getdate(f"{year}-{month:02d}-01")
+        out.append(_target_vs_achieved(employee, annual_target, distribution_id, month_date))
+
+    return {"has_target": True, "months": out}
 
 
 # ---------------------------------------------------------------- orders-by-rep
