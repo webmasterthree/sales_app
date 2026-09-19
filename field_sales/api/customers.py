@@ -318,6 +318,15 @@ def record_collection(
         if pe.meta.has_field("created_by_emp"):
             pe.created_by_emp = employee
 
+        # Payment Entry has no field of its own for "who recorded this and
+        # through what channel" - reusing reference_no for that would break
+        # the moment a rep enters a real cheque/UTR number. A fixed marker
+        # in remarks is what collections_history() below greps for to tell
+        # a field collection apart from a desk-entered Payment Entry,
+        # without adding a new custom field just to carry one flag.
+        marker = f"Recorded via field_sales app by {employee}."
+        pe.remarks = f"{pe.remarks}\n{marker}" if pe.remarks else marker
+
         schedules_by_invoice: dict[str, list] = {}
         for row in frappe.get_all(
             "Payment Schedule",
@@ -377,6 +386,61 @@ def record_collection(
         frappe.flags.ignore_account_permission = False
 
     return {"payment_entry": pe.name, "amount": flt(pe.paid_amount, 2), "customer": customer}
+
+
+@frappe.whitelist()
+def collections_history(limit: int = 50) -> list:
+    """Recent payments recorded through record_collection above - not every
+    Payment Entry against a Customer, which would also surface anything the
+    accounts team enters directly on the desk. Scoped to the caller's own
+    territory, same as collections_report()."""
+    limit = cint(limit) or 50
+
+    filters = {
+        "payment_type": "Receive",
+        "party_type": "Customer",
+        "docstatus": 1,
+        "remarks": ["like", "%Recorded via field_sales app%"],
+    }
+
+    if not scope.has_unrestricted_scope():
+        territories = scope.effective_territories()
+        if not territories:
+            return []
+        customers = frappe.get_all("Customer", filters={"territory": ["in", territories]}, pluck="name")
+        if not customers:
+            return []
+        filters["party"] = ["in", customers]
+
+    rows = frappe.get_all(
+        "Payment Entry",
+        filters=filters,
+        fields=[
+            "name",
+            "party as customer",
+            "party_name as customer_name",
+            "paid_amount",
+            "mode_of_payment",
+            "posting_date",
+            "reference_no",
+            "owner",
+        ],
+        order_by="posting_date desc, creation desc",
+        limit_page_length=limit,
+    )
+
+    owners = {r.owner for r in rows}
+    employees = (
+        frappe.get_all("Employee", filters={"user_id": ["in", list(owners)]}, fields=["user_id", "employee_name"])
+        if owners
+        else []
+    )
+    name_by_user = {e.user_id: e.employee_name for e in employees}
+    for r in rows:
+        r["collected_by"] = name_by_user.get(r.owner, r.owner)
+        r["paid_amount"] = flt(r.paid_amount, 2)
+
+    return rows
 
 
 @frappe.whitelist()
