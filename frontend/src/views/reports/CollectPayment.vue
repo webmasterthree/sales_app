@@ -37,42 +37,57 @@
                 {{ allSelected ? "Unselect all" : "Select all" }}
               </button>
             </div>
-            <label
+            <div
               v-for="inv in ledger.invoices"
               :key="inv.name"
-              class="flex items-center gap-2.5 rounded-xl border px-3 py-2.5"
-              :class="selected[inv.name] ? 'border-accent bg-accent-soft/40' : 'border-rule bg-surface'"
+              class="rounded-xl border px-3 py-2.5"
+              :class="isSelected(inv) ? 'border-accent bg-accent-soft/40' : 'border-rule bg-surface'"
             >
-              <input
-                type="checkbox"
-                class="w-4 h-4 shrink-0"
-                :checked="!!selected[inv.name]"
-                @change="toggleInvoice(inv)"
-              />
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-display font-medium text-ink truncate">{{ inv.name }}</p>
-                <p class="text-xs" :class="isOverdue(inv) ? 'text-crit' : 'text-ink-3'">
-                  <template v-if="isOverdue(inv)">Overdue · due {{ inv.due_date }}</template>
-                  <template v-else-if="inv.due_date">due {{ inv.due_date }}</template>
-                </p>
+              <label class="flex items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  class="w-4 h-4 shrink-0"
+                  :checked="isSelected(inv)"
+                  @change="toggleInvoice(inv)"
+                />
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-display font-medium text-ink truncate">{{ inv.name }}</p>
+                  <p class="text-xs" :class="isOverdue(inv) ? 'text-crit' : 'text-ink-3'">
+                    <template v-if="isOverdue(inv)">Overdue · due {{ inv.due_date }} · </template>
+                    <template v-else-if="inv.due_date">due {{ inv.due_date }} · </template>
+                    outstanding {{ formatCurrency(inv.outstanding_amount) }}
+                  </p>
+                </div>
+              </label>
+              <div v-if="isSelected(inv)" class="flex items-center gap-2 mt-2 pl-[26px]">
+                <span class="text-xs text-ink-3 shrink-0">₹</span>
+                <input
+                  v-model.number="invoiceAmounts[inv.name]"
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  :max="inv.outstanding_amount"
+                  step="0.01"
+                  class="flex-1 h-[36px] rounded-[8px] border bg-surface px-2 text-sm tabular-nums"
+                  :class="invoiceAmountError(inv) ? 'border-crit' : 'border-rule'"
+                />
               </div>
-              <span class="text-sm font-display text-ink tabular-nums shrink-0">{{ formatCurrency(inv.outstanding_amount) }}</span>
-            </label>
+              <p v-if="isSelected(inv) && invoiceAmountError(inv)" class="text-xs text-crit mt-1 pl-[26px]">
+                {{ invoiceAmountError(inv) }}
+              </p>
+              <p
+                v-else-if="isSelected(inv) && Number(invoiceAmounts[inv.name]) < Number(inv.outstanding_amount)"
+                class="text-xs text-ink-3 mt-1 pl-[26px]"
+              >
+                Partial · {{ formatCurrency(inv.outstanding_amount - invoiceAmounts[inv.name]) }} will remain outstanding
+              </p>
+            </div>
           </div>
 
           <div class="bg-surface rounded-2xl border border-rule p-3.5 space-y-3.5">
-            <div>
-              <label class="block text-sm font-display text-ink-2 mb-1">Amount collected</label>
-              <input
-                v-model.number="amount"
-                type="number"
-                inputmode="decimal"
-                min="0"
-                :max="selectedTotal"
-                step="0.01"
-                class="w-full h-[46px] rounded-[10px] border border-rule bg-surface px-3 text-sm"
-              />
-              <p v-if="amountError" class="text-xs text-crit mt-1">{{ amountError }}</p>
+            <div class="flex items-baseline justify-between pb-3 border-b border-rule-soft">
+              <span class="text-xs text-ink-2">Total collected</span>
+              <span class="text-lg font-display font-semibold text-ink tabular-nums">{{ formatCurrency(selectedTotal) }}</span>
             </div>
 
             <div>
@@ -105,7 +120,7 @@
             :disabled="submitting || !canSubmit"
             @click="submit"
           >
-            {{ submitting ? "Recording…" : `Record collection · ${formatCurrency(amount || 0)}` }}
+            {{ submitting ? "Recording…" : `Record collection · ${formatCurrency(selectedTotal)}` }}
           </button>
         </template>
       </div>
@@ -114,7 +129,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue"
+import { computed, onMounted, ref } from "vue"
 import { call } from "frappe-ui"
 import { useRoute, useRouter } from "vue-router"
 import AppBar from "@/components/AppBar.vue"
@@ -130,10 +145,40 @@ const customer = route.params.customer
 const loading = ref(true)
 const loadError = ref("")
 const ledger = ref({ customer_name: "", invoices: [], total_outstanding: 0 })
-const selected = ref({})
-const amount = ref(0)
+
+// One entry per selected invoice: invoiceAmounts[name] = amount to collect
+// against it. Absence of a key means the invoice isn't selected - the
+// checkbox state and the per-row amount field share this single source of
+// truth instead of a separate selected-map.
+const invoiceAmounts = ref({})
+
 const modeOfPayment = ref("")
 const modesOfPayment = ref([])
+const referenceNo = ref("")
+const submitting = ref(false)
+const submitError = ref("")
+
+const today = new Date().toISOString().slice(0, 10)
+
+function isOverdue(inv) {
+  return inv.due_date && inv.due_date < today
+}
+
+function isSelected(inv) {
+  return Object.prototype.hasOwnProperty.call(invoiceAmounts.value, inv.name)
+}
+
+function invoiceAmountError(inv) {
+  const value = invoiceAmounts.value[inv.name]
+  if (value === "" || value === null || value === undefined) return "Enter an amount."
+  if (Number(value) <= 0) return "Enter an amount greater than zero."
+  if (Number(value) > Number(inv.outstanding_amount) + 0.01) return "Can't exceed this invoice's outstanding amount."
+  return ""
+}
+
+const selectedTotal = computed(() =>
+  Object.values(invoiceAmounts.value).reduce((sum, v) => sum + (Number(v) || 0), 0)
+)
 
 const referenceRequired = computed(() => {
   const mode = modesOfPayment.value.find((m) => m.name === modeOfPayment.value)
@@ -146,60 +191,37 @@ const referenceError = computed(() => {
   }
   return ""
 })
-const referenceNo = ref("")
-const submitting = ref(false)
-const submitError = ref("")
-
-const today = new Date().toISOString().slice(0, 10)
-
-function isOverdue(inv) {
-  return inv.due_date && inv.due_date < today
-}
-
-const selectedTotal = computed(() =>
-  ledger.value.invoices
-    .filter((inv) => selected.value[inv.name])
-    .reduce((sum, inv) => sum + Number(inv.outstanding_amount || 0), 0)
-)
-
-const amountError = computed(() => {
-  if (amount.value === "" || amount.value === null) return ""
-  if (Number(amount.value) <= 0) return "Enter an amount greater than zero."
-  if (Number(amount.value) > selectedTotal.value + 0.01) return "Amount can't exceed the selected invoices' total."
-  return ""
-})
 
 const canSubmit = computed(() =>
-  Object.values(selected.value).some(Boolean) &&
-  Number(amount.value) > 0 &&
-  !amountError.value &&
+  ledger.value.invoices.some(isSelected) &&
+  ledger.value.invoices.every((inv) => !isSelected(inv) || !invoiceAmountError(inv)) &&
+  selectedTotal.value > 0 &&
   !!modeOfPayment.value &&
   !referenceError.value
 )
 
 function toggleInvoice(inv) {
-  if (selected.value[inv.name]) {
-    delete selected.value[inv.name]
+  if (isSelected(inv)) {
+    const next = { ...invoiceAmounts.value }
+    delete next[inv.name]
+    invoiceAmounts.value = next
   } else {
-    selected.value[inv.name] = true
+    invoiceAmounts.value = { ...invoiceAmounts.value, [inv.name]: Number(inv.outstanding_amount) }
   }
-  selected.value = { ...selected.value }
-  amount.value = Number(selectedTotal.value.toFixed(2))
 }
 
 const allSelected = computed(
-  () => ledger.value.invoices.length > 0 && ledger.value.invoices.every((inv) => selected.value[inv.name])
+  () => ledger.value.invoices.length > 0 && ledger.value.invoices.every(isSelected)
 )
 
 function toggleAll() {
   if (allSelected.value) {
-    selected.value = {}
+    invoiceAmounts.value = {}
   } else {
-    const sel = {}
-    for (const inv of ledger.value.invoices) sel[inv.name] = true
-    selected.value = sel
+    const next = {}
+    for (const inv of ledger.value.invoices) next[inv.name] = Number(inv.outstanding_amount)
+    invoiceAmounts.value = next
   }
-  amount.value = Number(selectedTotal.value.toFixed(2))
 }
 
 async function load() {
@@ -212,10 +234,9 @@ async function load() {
     ])
     ledger.value = ledgerData
     modesOfPayment.value = modes
-    const sel = {}
-    for (const inv of ledgerData.invoices) sel[inv.name] = true
-    selected.value = sel
-    amount.value = Number(selectedTotal.value.toFixed(2))
+    const next = {}
+    for (const inv of ledgerData.invoices) next[inv.name] = Number(inv.outstanding_amount)
+    invoiceAmounts.value = next
   } catch (err) {
     loadError.value = err.messages?.[0] || err.message || "Could not load this customer's ledger."
   } finally {
@@ -230,9 +251,8 @@ async function submit() {
   try {
     await call("field_sales.api.customers.record_collection", {
       customer,
-      amount: amount.value,
+      invoice_amounts: invoiceAmounts.value,
       mode_of_payment: modeOfPayment.value,
-      invoices: Object.keys(selected.value).filter((name) => selected.value[name]),
       reference_no: referenceNo.value || undefined,
     })
     router.replace("/reports/collections")

@@ -1,2 +1,0 @@
-import{_ as t}from"./AppBar-BYWZBC-Q.js";import{_ as o}from"./EmptyState-o9ns3xdE.js";import{c,b as e,o as n}from"./index-pC7YOsW7.js";import"./SyncStatus-C9RBAgLN.js";const r={class:"min-h-screen bg-ground"},f={__name:"NotFound",setup(s){return(a,i)=>(n(),c("div",r,[e(t,{title:"Not found",fallback:"/"}),e(o,{icon:"alert-circle",title:"Page not found",description:"That screen doesn't exist."})]))}};export{f as default};
-//# sourceMappingURL=NotFound-D1D7O5sn.js.map

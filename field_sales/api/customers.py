@@ -236,18 +236,20 @@ def _mode_of_payment_account(mode_of_payment: str, company: str) -> str:
 @frappe.whitelist()
 def record_collection(
     customer: str,
-    amount: float,
+    invoice_amounts: str | dict,
     mode_of_payment: str,
-    invoices: str | list | None = None,
     reference_no: str | None = None,
 ) -> dict:
     """Record a payment collected from a customer in the field.
 
     Creates a real, submitted Payment Entry - the same document type the
     desk side and every ledger/report already reads - rather than a
-    parallel "collection" record only this app would understand. Allocated
-    across the customer's outstanding invoices oldest-due-first, optionally
-    narrowed to a caller-picked subset.
+    parallel "collection" record only this app would understand.
+
+    ``invoice_amounts`` is ``{invoice_name: amount_to_allocate}`` - the rep
+    picks which invoices and how much against each (a partial amount on one
+    invoice, the full outstanding on another), rather than this function
+    guessing an oldest-due-first split from a single total.
     """
     from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 
@@ -259,9 +261,11 @@ def record_collection(
         if customer_territory not in scope.effective_territories():
             frappe.throw(frappe._("{0} is outside your territory.").format(customer))
 
-    amount = flt(amount)
-    if amount <= 0:
-        frappe.throw(frappe._("Enter an amount greater than zero."))
+    if isinstance(invoice_amounts, str):
+        invoice_amounts = frappe.parse_json(invoice_amounts)
+    invoice_amounts = {name: flt(amt) for name, amt in (invoice_amounts or {}).items() if flt(amt) > 0}
+    if not invoice_amounts:
+        frappe.throw(frappe._("Select at least one invoice and enter an amount."))
 
     mop_type = frappe.db.get_value("Mode of Payment", mode_of_payment, "type")
     if mop_type != "Cash" and not (reference_no and reference_no.strip()):
@@ -273,30 +277,28 @@ def record_collection(
     if not employee:
         frappe.throw(frappe._("No active Employee record is linked to your account."))
 
+    names = list(invoice_amounts.keys())
     outstanding = frappe.get_all(
         "Sales Invoice",
-        filters={"customer": customer, "docstatus": 1, "outstanding_amount": [">", 0]},
+        filters={"customer": customer, "name": ["in", names], "docstatus": 1, "outstanding_amount": [">", 0]},
         fields=["name", "outstanding_amount", "due_date"],
-        order_by="due_date asc, posting_date asc",
     )
-
-    if invoices:
-        if isinstance(invoices, str):
-            invoices = frappe.parse_json(invoices)
-        wanted = set(invoices)
-        outstanding = [i for i in outstanding if i.name in wanted]
-
-    if not outstanding:
-        frappe.throw(frappe._("No matching outstanding invoices for {0}.").format(customer))
-
-    total_selected = flt(sum(flt(i.outstanding_amount) for i in outstanding), 2)
-    if amount > total_selected + 0.01:
+    found = {inv.name: inv for inv in outstanding}
+    missing = [name for name in names if name not in found]
+    if missing:
         frappe.throw(
-            frappe._(
-                "Amount collected ({0}) cannot exceed the outstanding total of the "
-                "selected invoices ({1})."
-            ).format(amount, total_selected)
+            frappe._("These invoices are not outstanding for {0}: {1}").format(customer, ", ".join(missing))
         )
+
+    for name, amt in invoice_amounts.items():
+        if amt > flt(found[name].outstanding_amount) + 0.01:
+            frappe.throw(
+                frappe._("{0} cannot exceed its outstanding amount of {1}.").format(
+                    name, flt(found[name].outstanding_amount, 2)
+                )
+            )
+
+    total_amount = flt(sum(invoice_amounts.values()), 2)
 
     # get_payment_entry (and Payment Entry's own validate()) read the
     # account's balance via erpnext.accounts.utils.get_balance_on, which
@@ -306,63 +308,60 @@ def record_collection(
     # account they never see or choose themselves.
     frappe.flags.ignore_account_permission = True
     try:
-        pe = get_payment_entry("Sales Invoice", outstanding[0].name, party_amount=amount)
+        pe = get_payment_entry("Sales Invoice", names[0], party_amount=total_amount)
         pe.mode_of_payment = mode_of_payment
         pe.paid_to = _mode_of_payment_account(mode_of_payment, pe.company)
         pe.reference_no = reference_no or f"Field collection - {employee}"
         pe.reference_date = nowdate()
-        pe.paid_amount = amount
-        pe.received_amount = amount
+        pe.paid_amount = total_amount
+        pe.received_amount = total_amount
         if pe.meta.has_field("created_by_emp"):
             pe.created_by_emp = employee
 
         schedules_by_invoice: dict[str, list] = {}
         for row in frappe.get_all(
             "Payment Schedule",
-            filters={"parent": ["in", [inv.name for inv in outstanding]], "outstanding": [">", 0]},
+            filters={"parent": ["in", names], "outstanding": [">", 0]},
             fields=["parent", "payment_term", "due_date", "payment_amount", "outstanding"],
             order_by="parent, due_date asc",
         ):
             schedules_by_invoice.setdefault(row.parent, []).append(row)
 
         pe.set("references", [])
-        remaining = amount
-        for inv in outstanding:
-            if remaining <= 0.01:
-                break
-            schedule = schedules_by_invoice.get(inv.name)
+        for name in names:
+            inv = found[name]
+            invoice_remaining = invoice_amounts[name]
+            schedule = schedules_by_invoice.get(name)
             if not schedule:
                 # No payment-term split on this invoice - one reference row
-                # against the whole thing, same as before.
-                alloc = min(flt(inv.outstanding_amount), remaining)
+                # against the whole thing.
                 pe.append(
                     "references",
                     {
                         "reference_doctype": "Sales Invoice",
-                        "reference_name": inv.name,
+                        "reference_name": name,
                         "due_date": inv.due_date,
                         "total_amount": inv.outstanding_amount,
                         "outstanding_amount": inv.outstanding_amount,
-                        "allocated_amount": alloc,
+                        "allocated_amount": invoice_remaining,
                     },
                 )
-                remaining -= alloc
                 continue
 
             # This invoice has "Payment Term based allocation" enabled -
             # ERPNext requires a payment_term on every reference row in that
             # case, and refuses an allocation that doesn't respect each
             # term's own outstanding. Walk the schedule oldest-due-first,
-            # same ordering the invoice-level loop already uses.
+            # bounded to what the rep entered for this invoice.
             for term in schedule:
-                if remaining <= 0.01:
+                if invoice_remaining <= 0.01:
                     break
-                alloc = min(flt(term.outstanding), remaining)
+                alloc = min(flt(term.outstanding), invoice_remaining)
                 pe.append(
                     "references",
                     {
                         "reference_doctype": "Sales Invoice",
-                        "reference_name": inv.name,
+                        "reference_name": name,
                         "payment_term": term.payment_term,
                         "due_date": term.due_date,
                         "total_amount": term.payment_amount,
@@ -370,7 +369,7 @@ def record_collection(
                         "allocated_amount": alloc,
                     },
                 )
-                remaining -= alloc
+                invoice_remaining -= alloc
 
         pe.insert()
         pe.submit()
